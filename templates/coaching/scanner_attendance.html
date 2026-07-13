@@ -1,45 +1,81 @@
 {% extends 'coaching/base.html' %}
 
-{% block title %}Attendance QR Terminal{% endblock %}
+{% block title %}Attendance QR & Face Terminal{% endblock %}
 {% block active_att_scan %}active{% endblock %}
 {% block active_student_att_scan %}active{% endblock %}
 {% block page_title %}Attendance Scanning Terminal{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Styling html5-qrcode to match premium dark style */
+    #qrReader {
+        border: none !important;
+        border-radius: 20px;
+        overflow: hidden;
+        width: 100% !important;
+        max-width: 440px;
+        aspect-ratio: 4/3;
+        margin: 0 auto;
+        background-color: #000;
+        box-shadow: var(--shadow-premium);
+    }
+    #qrReader__dashboard, #qrReader__status_span {
+        display: none !important;
+    }
+    #qrReader video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        transform: scaleX(-1); /* mirror effect */
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card-premium" style="max-width: 600px; margin: 0 auto; text-align: center;">
     <h2 style="margin-bottom: 8px;">Mark Attendance</h2>
-    <p style="color: var(--text-secondary); margin-bottom: 24px;">Hold student QR Code in front of the camera</p>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">Scan your QR Code card or verify your face to check-in</p>
     
+    <!-- Mode Toggles -->
+    <div style="display: flex; gap: 12px; margin-bottom: 24px; justify-content: center; width: 100%;">
+        <button onclick="setMode('qr')" class="btn-premium" id="modeQrBtn" style="flex: 1; padding: 10px;">
+            <i class="fa-solid fa-qrcode" style="margin-right: 6px;"></i> Scan QR Card
+        </button>
+        <button onclick="setMode('face')" class="btn-premium btn-secondary" id="modeFaceBtn" style="flex: 1; padding: 10px;">
+            <i class="fa-solid fa-face-smile" style="margin-right: 6px;"></i> Scan Face
+        </button>
+    </div>
+
     <div class="scanner-container">
-        <!-- Hidden reader element for library -->
-        <div id="qrReader" style="width: 100%; max-width: 400px; display: none;"></div>
+        <!-- QR Scanner viewport -->
+        <div id="qrReader" style="width: 100%; display: block;"></div>
         
-        <!-- Viewport overlay -->
-        <div class="webcam-viewport scanner-searching" id="scanViewport">
-            <video id="previewVideo" style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+        <!-- Face Scanner viewport (Webcam preview) -->
+        <div class="webcam-viewport scanner-searching" id="scanViewport" style="display: none; max-width: 440px;">
+            <video id="previewVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
             <div class="webcam-overlay">
                 <div class="scan-line" id="scanLine"></div>
             </div>
         </div>
         
-        <div class="scanner-status" id="scanStatus" style="width: 100%;">
-            Initializing camera stream...
+        <!-- Hidden canvas for snapping face frames -->
+        <canvas id="faceCanvas" width="320" height="240" style="display: none;"></canvas>
+        
+        <div class="scanner-status" id="scanStatus" style="width: 100%; margin-top: 16px;">
+            Initializing terminal...
         </div>
         
-        <div id="scanResultCard" style="display: none; width: 100%; padding: 20px; border-radius: 16px; background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); text-align: left;">
-            <h4 style="color: var(--accent-emerald); display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-circle-check"></i> <span id="resultMessage">Success!</span>
+        <!-- Alert feedback widget -->
+        <div id="scanResultCard" style="display: none; width: 100%; padding: 20px; border-radius: 16px; margin-top: 20px; text-align: left;">
+            <h4 style="display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid" id="resultIcon"></i> <span id="resultMessage">Success!</span>
             </h4>
             <div style="margin-top: 12px; font-size: 0.95rem;">
                 <div style="margin-bottom: 4px;">Student: <strong id="resultStudent">Name</strong></div>
                 <div style="margin-bottom: 4px;">Batch: <span id="resultBatch">Batch</span></div>
-                <div>Checked In: <strong id="resultTime">00:00 AM</strong></div>
+                <div>Time Checked In: <strong id="resultTime">00:00 AM</strong></div>
             </div>
         </div>
-
-        <button onclick="startScanning()" class="btn-premium" id="toggleScanBtn" style="width: 100%;">
-            Start QR Terminal
-        </button>
     </div>
 </div>
 {% endblock %}
@@ -49,79 +85,104 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
     let html5QrCode = null;
-    let isScanning = false;
+    let faceStream = null;
+    let faceInterval = null;
+    let currentMode = 'qr'; // 'qr' or 'face'
+    let isProcessing = false;
+
     const scanStatus = document.getElementById('scanStatus');
     const scanViewport = document.getElementById('scanViewport');
+    const qrReaderDiv = document.getElementById('qrReader');
     const resultCard = document.getElementById('scanResultCard');
-    const toggleBtn = document.getElementById('toggleScanBtn');
+    const previewVideo = document.getElementById('previewVideo');
+    const faceCanvas = document.getElementById('faceCanvas');
 
-    function startScanning() {
-        if (isScanning) {
-            stopScanning();
-            return;
+    // Programmatic Beep Player using Web Audio API
+    function playBeep() {
+        try {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+            oscillator.type = "sine";
+            oscillator.frequency.value = 900; // 900 Hz high tone
+            gainNode.gain.setValueAtTime(0, context.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.15);
+            oscillator.start(context.currentTime);
+            oscillator.stop(context.currentTime + 0.15);
+        } catch (e) {
+            console.error("Audio failed:", e);
         }
+    }
 
-        scanStatus.innerText = "Requesting webcam stream...";
+    // Toggle Modes
+    function setMode(mode) {
+        if (mode === currentMode) return;
+        currentMode = mode;
+        
+        // Update button visual styles
+        if (mode === 'qr') {
+            document.getElementById('modeQrBtn').className = "btn-premium";
+            document.getElementById('modeFaceBtn').className = "btn-premium btn-secondary";
+            
+            stopFaceScan();
+            qrReaderDiv.style.display = 'block';
+            scanViewport.style.display = 'none';
+            initQRScan();
+        } else {
+            document.getElementById('modeFaceBtn').className = "btn-premium";
+            document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
+            
+            stopQRScan();
+            qrReaderDiv.style.display = 'none';
+            scanViewport.style.display = 'block';
+            initFaceScan();
+        }
         resultCard.style.display = 'none';
+    }
 
+    // --- QR Scanner implementation ---
+    function initQRScan() {
+        scanStatus.innerText = "Requesting webcam for QR scan...";
         Html5Qrcode.getCameras().then(devices => {
             if (devices && devices.length > 0) {
-                // Prefer back camera if available, otherwise use default
-                const cameraId = devices[0].id;
                 html5QrCode = new Html5Qrcode("qrReader");
-                
                 html5QrCode.start(
-                    { facingMode: "user" }, // Mirror effect for kiosk check-ins
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 }
-                    },
+                    { facingMode: "user" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
                     onQrSuccess,
                     onQrError
                 )
                 .then(() => {
-                    isScanning = true;
-                    toggleBtn.innerText = "Stop Terminal";
-                    toggleBtn.classList.add('btn-danger');
-                    scanStatus.innerText = "Terminal Active. Scanning for QR codes...";
-                    
-                    // Hook video track to custom viewport
-                    const videoTrack = document.querySelector('#qrReader video');
-                    if (videoTrack) {
-                        const previewVideo = document.getElementById('previewVideo');
-                        previewVideo.srcObject = videoTrack.srcObject;
-                        previewVideo.play();
-                    }
+                    scanStatus.innerText = "Scanning for QR Code cards...";
                 })
                 .catch(err => {
-                    console.error(err);
                     scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera.</span>";
                 });
             } else {
-                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware detected.</span>";
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware found.</span>";
             }
         }).catch(err => {
-            console.error(err);
             scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera permission error.</span>";
         });
     }
 
-    function stopScanning() {
+    function stopQRScan() {
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
-                isScanning = false;
-                toggleBtn.innerText = "Start QR Terminal";
-                toggleBtn.classList.remove('btn-danger');
-                scanStatus.innerText = "Terminal stopped.";
-                document.getElementById('previewVideo').srcObject = null;
-            }).catch(err => console.error("Failed to stop scanner:", err));
+                html5QrCode = null;
+            }).catch(err => console.error(err));
         }
     }
 
     function onQrSuccess(decodedText, decodedResult) {
-        // Pause scanning to process
+        if (isProcessing) return;
+        isProcessing = true;
         html5QrCode.pause();
-        scanStatus.innerText = "QR Code detected! Processing check-in...";
+        
+        scanStatus.innerText = "Processing check-in...";
         
         fetch("{% url 'mark_attendance_api' %}", {
             method: 'POST',
@@ -136,51 +197,155 @@
         })
         .then(res => res.json())
         .then(data => {
-            if (data.success) {
-                // Show Success
-                resultCard.style.backgroundColor = "rgba(16, 185, 129, 0.08)";
-                resultCard.style.borderColor = "rgba(16, 185, 129, 0.2)";
-                document.getElementById('resultMessage').innerText = data.message;
-                document.getElementById('resultMessage').style.color = "var(--accent-emerald)";
-                document.getElementById('resultStudent').innerText = data.student_name;
-                document.getElementById('resultBatch').innerText = data.batch;
-                document.getElementById('resultTime').innerText = data.time;
-                resultCard.style.display = 'block';
-            } else {
-                // Show Duplicate or Error
-                resultCard.style.backgroundColor = "rgba(245, 158, 11, 0.08)";
-                resultCard.style.borderColor = "rgba(245, 158, 11, 0.2)";
-                document.getElementById('resultMessage').innerText = data.message;
-                document.getElementById('resultMessage').style.color = "var(--accent-amber)";
-                document.getElementById('resultStudent').innerText = data.student_name || "Unknown";
-                document.getElementById('resultBatch').innerText = data.batch || "None";
-                document.getElementById('resultTime').innerText = "Already logged today";
-                resultCard.style.display = 'block';
-            }
-
-            // Resume scanning after 3 seconds
+            playBeep(); // Beep on scan
+            showResult(data);
+            
             setTimeout(() => {
-                if (isScanning && html5QrCode) {
+                isProcessing = false;
+                resultCard.style.display = 'none';
+                if (currentMode === 'qr' && html5QrCode) {
                     html5QrCode.resume();
-                    scanStatus.innerText = "Scanning for QR codes...";
-                    resultCard.style.display = 'none';
+                    scanStatus.innerText = "Scanning for QR Code cards...";
                 }
             }, 3000);
         })
         .catch(err => {
-            console.error(err);
-            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Server communication error. Resuming...</span>";
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Connection error. Resuming...</span>";
             setTimeout(() => {
-                if (isScanning && html5QrCode) {
+                isProcessing = false;
+                if (currentMode === 'qr' && html5QrCode) {
                     html5QrCode.resume();
-                    scanStatus.innerText = "Scanning for QR codes...";
                 }
             }, 3000);
         });
     }
 
-    function onQrError(err) {
-        // Suppress console spam from library checking frame-by-frame
+    function onQrError(err) {}
+
+    // --- Face Scanner implementation ---
+    function initFaceScan() {
+        scanStatus.innerText = "Requesting webcam for Face scan...";
+        
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(stream => {
+                faceStream = stream;
+                previewVideo.srcObject = stream;
+                previewVideo.play();
+                
+                scanStatus.innerText = "Align your face. Detecting...";
+                
+                // Start snapping loop every 1.5 seconds
+                faceInterval = setInterval(captureFaceFrame, 1500);
+            })
+            .catch(err => {
+                console.error(err);
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Could not access webcam for face check-in.</span>";
+            });
+    }
+
+    function stopFaceScan() {
+        if (faceInterval) {
+            clearInterval(faceInterval);
+            faceInterval = null;
+        }
+        if (faceStream) {
+            faceStream.getTracks().forEach(track => track.stop());
+            faceStream = null;
+        }
+        previewVideo.srcObject = null;
+    }
+
+    function captureFaceFrame() {
+        if (isProcessing) return;
+        
+        const context = faceCanvas.getContext('2d');
+        // Mirror snap drawing
+        context.translate(faceCanvas.width, 0);
+        context.scale(-1, 1);
+        context.drawImage(previewVideo, 0, 0, faceCanvas.width, faceCanvas.height);
+        context.setTransform(1, 0, 0, 1, 0, 0); // Reset
+        
+        const base64Image = faceCanvas.toDataURL('image/jpeg');
+        
+        isProcessing = true;
+        scanStatus.innerText = "Analyzing facial matching...";
+        
+        fetch("{% url 'verify_face_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                image: base64Image
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                playBeep(); // Beep on successful face match
+                showResult(data);
+                
+                setTimeout(() => {
+                    isProcessing = false;
+                    resultCard.style.display = 'none';
+                    scanStatus.innerText = "Align your face. Detecting...";
+                }, 3000);
+            } else {
+                // If face not recognized or already checked in
+                if (data.already_marked) {
+                    playBeep(); // Still beep for duplicates since they are identified
+                    showResult(data);
+                    setTimeout(() => {
+                        isProcessing = false;
+                        resultCard.style.display = 'none';
+                        scanStatus.innerText = "Align your face. Detecting...";
+                    }, 3000);
+                } else {
+                    isProcessing = false;
+                    scanStatus.innerHTML = `<span style='color: var(--text-secondary);'>${data.message}</span>`;
+                }
+            }
+        })
+        .catch(err => {
+            isProcessing = false;
+            scanStatus.innerText = "Face scan error. Retrying...";
+        });
+    }
+
+    // Render result card alerts
+    function showResult(data) {
+        const iconEl = document.getElementById('resultIcon');
+        
+        if (data.success) {
+            resultCard.style.backgroundColor = "rgba(16, 185, 129, 0.08)";
+            resultCard.style.borderColor = "rgba(16, 185, 129, 0.2)";
+            document.getElementById('resultMessage').innerText = data.message;
+            document.getElementById('resultMessage').style.color = "var(--accent-emerald)";
+            iconEl.className = "fa-solid fa-circle-check";
+            iconEl.style.color = "var(--accent-emerald)";
+            
+            document.getElementById('resultStudent').innerText = data.student_name;
+            document.getElementById('resultBatch').innerText = data.batch;
+            document.getElementById('resultTime').innerText = data.time;
+        } else {
+            resultCard.style.backgroundColor = "rgba(245, 158, 11, 0.08)";
+            resultCard.style.borderColor = "rgba(245, 158, 11, 0.2)";
+            document.getElementById('resultMessage').innerText = data.message;
+            document.getElementById('resultMessage').style.color = "var(--accent-amber)";
+            iconEl.className = "fa-solid fa-triangle-exclamation";
+            iconEl.style.color = "var(--accent-amber)";
+            
+            document.getElementById('resultStudent').innerText = data.student_name || "Unknown";
+            document.getElementById('resultBatch').innerText = data.batch || "None";
+            document.getElementById('resultTime').innerText = "Logged Today";
+        }
+        resultCard.style.display = 'block';
+    }
+
+    // Auto start scanner immediately on load
+    window.onload = function() {
+        initQRScan();
     }
 </script>
 {% endblock %}
