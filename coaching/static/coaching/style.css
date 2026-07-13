@@ -686,3 +686,113 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 24px;
     display: inline-block;
 }
+
+/* Custom Dropdown option color fix */
+select.form-control option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* Mobile-only visibility helper */
+.mobile-only {
+    display: none;
+}
+
+/* Responsiveness for all screens (TV, PCs, Tablets, Mobile) */
+@media (min-width: 1440px) {
+    /* TV and High-res Desktop monitors layout adjustments */
+    .content-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 1024px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0;
+    }
+    
+    .sidebar-brand {
+        padding: 16px 20px;
+        text-align: center;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .sidebar-menu {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px;
+        gap: 6px;
+        justify-content: center;
+    }
+    
+    .sidebar-link {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+        gap: 6px;
+    }
+    
+    .sidebar-footer {
+        display: none;
+    }
+    
+    .mobile-only {
+        display: block;
+    }
+    
+    .main-wrapper {
+        margin-left: 0;
+    }
+    
+    .topbar {
+        padding: 0 20px;
+        height: 60px;
+    }
+    
+    .content-container {
+        padding: 20px;
+    }
+    
+    .profile-flex-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-sections {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .sidebar-menu {
+        padding: 8px 4px;
+    }
+    
+    .sidebar-link {
+        padding: 6px 8px;
+        font-size: 0.75rem;
+    }
+    
+    .topbar h3 {
+        font-size: 1.1rem;
+    }
+}
