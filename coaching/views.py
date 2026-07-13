@@ -541,6 +541,17 @@ def verify_face_api(request):
                 
                 matched_profile = best_match
             
+            # If the scanner is identifying for fees, return details directly without marking attendance
+            if data.get('action') == 'identify':
+                return JsonResponse({
+                    'success': True,
+                    'student_id': matched_profile.id,
+                    'student_name': matched_profile.user.get_full_name(),
+                    'batch': matched_profile.batch.name if matched_profile.batch else 'None',
+                    'monthly_fee': str(matched_profile.monthly_fee),
+                    'recommended_due_date': (matched_profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+                })
+
             # Verify check-in limit (once per day)
             exists = AttendanceRecord.objects.filter(student=matched_profile, date=today).exists()
             if exists:
