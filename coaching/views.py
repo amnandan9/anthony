@@ -1,5 +1,8 @@
 import json
 import datetime
+import base64
+from io import BytesIO
+from PIL import Image
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -11,6 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule
 from coaching.decorators import super_admin_required, teacher_required, student_required, role_required
+
 
 # --- Authentication Views ---
 
@@ -166,6 +170,10 @@ def teacher_dashboard(request):
     # 3. Calendar classes & events
     classes_this_month = ClassSchedule.objects.filter(date__year=today.year, date__month=today.month)
     batches = Batch.objects.all()
+    
+    # Fetch distinct attendance dates
+    attendance_dates = list(AttendanceRecord.objects.values_list('date', flat=True).distinct())
+    attendance_dates_json = json.dumps([d.strftime('%Y-%m-%d') for d in attendance_dates])
 
     # Form schemas and structures
     context = {
@@ -178,6 +186,7 @@ def teacher_dashboard(request):
         'students': students,
         'batches': batches,
         'calendar_classes': classes_this_month,
+        'attendance_dates_json': attendance_dates_json,
         'overdue_students': overdue_students,
         'today': today,
         'selected_batch': batch_filter,
@@ -205,6 +214,7 @@ def register_student(request):
         batch_id = request.POST.get('batch')
         fee = request.POST.get('monthly_fee')
         next_due = request.POST.get('next_due_date')
+        face_data = request.POST.get('face_data')
         
         if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists.")
@@ -231,7 +241,8 @@ def register_student(request):
             joining_date=joining_date,
             batch=batch,
             monthly_fee=fee,
-            next_due_date=next_due
+            next_due_date=next_due,
+            face_data=face_data
         )
         
         messages.success(request, f"Student {user.get_full_name()} registered successfully!")
@@ -442,13 +453,38 @@ def mark_attendance_api(request):
             
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
 
+def compare_faces_pure_python(registered_b64, scanned_b64):
+    try:
+        if not registered_b64 or not scanned_b64:
+            return False, "Missing image data"
+        
+        if ',' in registered_b64:
+            registered_b64 = registered_b64.split(',')[1]
+        if ',' in scanned_b64:
+            scanned_b64 = scanned_b64.split(',')[1]
+        
+        # Decode and load images
+        img1 = Image.open(BytesIO(base64.b64decode(registered_b64))).convert('L').resize((16, 16))
+        img2 = Image.open(BytesIO(base64.b64decode(scanned_b64))).convert('L').resize((16, 16))
+        
+        pixels1 = list(img1.getdata())
+        pixels2 = list(img2.getdata())
+        
+        # Mean Absolute Error (MAE) calculation
+        mae = sum(abs(p1 - p2) for p1, p2 in zip(pixels1, pixels2)) / len(pixels1)
+        
+        # Lower MAE indicates higher similarity. 50 is a solid permissive threshold for webcams.
+        return mae < 50.0, mae
+    except Exception as e:
+        return False, str(e)
+
 @csrf_exempt
 @login_required
 def verify_face_api(request):
     """
     API endpoint that verifies a student's face profile.
-    If the student does not have face data stored, saves the image.
-    If they do, performs simulated facial match and marks attendance.
+    If username/student is specific, validates them.
+    If general, scans all active students to match.
     """
     if request.method == 'POST':
         try:
@@ -456,39 +492,69 @@ def verify_face_api(request):
             image_data = data.get('image') # Base64 Image string
             username = data.get('username')
             
-            # Use request.user if username not provided
-            target_user = request.user
-            if username and request.user.role == 'teacher':
-                target_user = User.objects.filter(username=username).first()
-                
-            if not target_user:
-                return JsonResponse({'success': False, 'message': 'Student account not found.'})
-                
-            profile = StudentProfile.objects.filter(user=target_user).first()
-            if not profile:
-                return JsonResponse({'success': False, 'message': 'Student profile not found.'})
-                
             today = timezone.localdate()
             
-            # Check if face is registered
-            is_registration = False
-            if not profile.face_data:
-                profile.face_data = image_data
-                profile.save()
-                is_registration = True
+            # Scenario 1: Target username specified (e.g. self check-in from student dashboard)
+            if username or (request.user.role == 'student'):
+                target_user = request.user
+                if username and request.user.role == 'teacher':
+                    target_user = User.objects.filter(username=username).first()
+                
+                if not target_user:
+                    return JsonResponse({'success': False, 'message': 'Student account not found.'})
+                    
+                profile = StudentProfile.objects.filter(user=target_user).first()
+                if not profile:
+                    return JsonResponse({'success': False, 'message': 'Student profile not found.'})
+                
+                # If face_data is not registered, save it (Registration mode)
+                if not profile.face_data:
+                    profile.face_data = image_data
+                    profile.save()
+                    return JsonResponse({
+                        'success': True,
+                        'is_registration': True,
+                        'message': 'Face registered successfully!',
+                        'student_name': profile.user.get_full_name()
+                    })
+                
+                # Perform matching
+                match, mae = compare_faces_pure_python(profile.face_data, image_data)
+                if not match:
+                    return JsonResponse({'success': False, 'message': f'Face verification failed (Difference: {mae:.1f}). Please align your face.'})
+                
+                matched_profile = profile
+            else:
+                # Scenario 2: General Attendance Scan (Identify student by matching face database)
+                best_match = None
+                lowest_mae = 999.0
+                
+                profiles = StudentProfile.objects.filter(user__is_active=True).exclude(face_data__isnull=True).exclude(face_data='')
+                for p in profiles:
+                    match, mae = compare_faces_pure_python(p.face_data, image_data)
+                    if match and mae < lowest_mae:
+                        lowest_mae = mae
+                        best_match = p
+                        
+                if not best_match:
+                    return JsonResponse({'success': False, 'message': 'Face not recognized. Please scan your QR code or register.'})
+                
+                matched_profile = best_match
             
-            # Check if already checked in today
-            exists = AttendanceRecord.objects.filter(student=profile, date=today).exists()
+            # Verify check-in limit (once per day)
+            exists = AttendanceRecord.objects.filter(student=matched_profile, date=today).exists()
             if exists:
                 return JsonResponse({
-                    'success': True,
-                    'is_registration': is_registration,
-                    'message': f'Face verified! {profile.user.get_full_name()} is already marked present for today.'
+                    'success': False,
+                    'already_marked': True,
+                    'message': f'{matched_profile.user.get_full_name()} is already marked present for today.',
+                    'student_name': matched_profile.user.get_full_name(),
+                    'batch': matched_profile.batch.name if matched_profile.batch else 'None'
                 })
                 
-            # Create Attendance
+            # Record Attendance
             record = AttendanceRecord.objects.create(
-                student=profile,
+                student=matched_profile,
                 date=today,
                 status='present',
                 marked_by='self_face'
@@ -496,12 +562,11 @@ def verify_face_api(request):
             
             return JsonResponse({
                 'success': True,
-                'is_registration': is_registration,
-                'message': 'Face verification successful! Attendance marked.',
-                'student_name': profile.user.get_full_name(),
+                'message': 'Face verification successful!',
+                'student_name': matched_profile.user.get_full_name(),
+                'batch': matched_profile.batch.name if matched_profile.batch else 'None',
                 'time': record.time_in.strftime('%I:%M %p')
             })
-            
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
             
