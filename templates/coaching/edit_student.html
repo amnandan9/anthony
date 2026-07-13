@@ -1,0 +1,89 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}Edit Student - {{ profile.user.get_full_name }}{% endblock %}
+{% block page_title %}Edit Student Profile{% endblock %}
+
+{% block content %}
+<div class="card-premium" style="max-width: 800px; margin: 0 auto;">
+    <h2 style="margin-bottom: 24px;">Update Student File: {{ profile.user.get_full_name }}</h2>
+    
+    <form method="post" action="{% url 'edit_student' student_id=profile.id %}">
+        {% csrf_token %}
+        
+        <h4 style="color: var(--accent-indigo); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">1. User Credentials</h4>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="first_name" class="form-label">First Name</label>
+                <input type="text" name="first_name" id="first_name" class="form-control" value="{{ profile.user.first_name }}" required>
+            </div>
+            <div class="form-group">
+                <label for="last_name" class="form-label">Last Name</label>
+                <input type="text" name="last_name" id="last_name" class="form-control" value="{{ profile.user.last_name }}" required>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="email" class="form-label">Email Address</label>
+            <input type="email" name="email" id="email" class="form-control" value="{{ profile.user.email }}" required>
+        </div>
+        
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">2. Student Profile Details</h4>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="age" class="form-label">Age</label>
+                <input type="number" name="age" id="age" class="form-control" min="5" max="99" value="{{ profile.age }}" required>
+            </div>
+            <div class="form-group">
+                <label for="school_college" class="form-label">School / College</label>
+                <input type="text" name="school_college" id="school_college" class="form-control" value="{{ profile.school_college }}" required>
+            </div>
+        </div>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="contact_number" class="form-label">Student Contact Number</label>
+                <input type="text" name="contact_number" id="contact_number" class="form-control" value="{{ profile.contact_number }}" required>
+            </div>
+            <div class="form-group">
+                <label for="parent_contact" class="form-label">Parent/Guardian Contact Number</label>
+                <input type="text" name="parent_contact" id="parent_contact" class="form-control" value="{{ profile.parent_contact }}" required>
+            </div>
+        </div>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="batch" class="form-label">Assigned Batch</label>
+                <select name="batch" id="batch" class="form-control" required>
+                    {% for batch in batches %}
+                        <option value="{{ batch.id }}" {% if profile.batch.id == batch.id %}selected{% endif %}>{{ batch.name }} ({{ batch.timing }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="joining_date" class="form-label">Joining Date</label>
+                <input type="date" name="joining_date" id="joining_date" class="form-control" value="{{ profile.joining_date|date:'Y-m-d' }}" required>
+            </div>
+        </div>
+        
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">3. Fees and Billing Parameters</h4>
+        
+        <div class="form-grid" style="margin-bottom: 30px;">
+            <div class="form-group">
+                <label for="monthly_fee" class="form-label">Monthly Fee Amount ($)</label>
+                <input type="number" step="0.01" name="monthly_fee" id="monthly_fee" class="form-control" value="{{ profile.monthly_fee }}" required>
+            </div>
+            <div class="form-group">
+                <label for="next_due_date" class="form-label">Next Fee Due Date</label>
+                <input type="date" name="next_due_date" id="next_due_date" class="form-control" value="{{ profile.next_due_date|date:'Y-m-d' }}" required>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 16px; justify-content: flex-end;">
+            <a href="{% url 'student_detail' student_id=profile.id %}" class="btn-premium btn-secondary">Cancel</a>
+            <button type="submit" class="btn-premium">Save Changes</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

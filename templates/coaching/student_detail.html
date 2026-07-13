@@ -1,0 +1,241 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}Student File - {{ profile.user.get_full_name }}{% endblock %}
+{% block page_title %}Student File{% endblock %}
+
+{% block content %}
+<div class="profile-flex-layout">
+    <!-- Left Column: Quick profile and QR Code -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="profile-card-left">
+            <div class="student-avatar" id="avatarContainer">
+                {% if profile.face_data %}
+                    <img src="{{ profile.face_data }}" alt="Student Face Profile">
+                {% else %}
+                    <i class="fa-solid fa-user"></i>
+                {% endif %}
+            </div>
+            
+            <h2 style="margin-bottom: 4px;">{{ profile.user.get_full_name }}</h2>
+            <p style="color: var(--accent-indigo); font-weight: 500; font-size: 0.95rem;">{{ profile.batch.name|default:"No Batch" }}</p>
+            
+            <div style="width: 100%; border-top: 1px solid var(--border-color); margin: 20px 0;"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; font-size: 0.9rem;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Age:</span>
+                    <strong>{{ profile.age }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Joining Date:</span>
+                    <strong>{{ profile.joining_date|date:"M d, Y" }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Monthly Fee:</span>
+                    <strong style="color: var(--accent-indigo);">${{ profile.monthly_fee }}</strong>
+                </div>
+            </div>
+
+            <!-- Dynamic QR Code Card -->
+            <div class="qr-display-card" id="qrcode" title="Scan to record attendance or fee"></div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">Token: {{ profile.qr_code_token }}</p>
+            
+            <div style="margin-top: 24px; display: flex; gap: 12px; width: 100%;">
+                <a href="{% url 'edit_student' student_id=profile.id %}" class="btn-premium btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 12px;">
+                    <i class="fa-solid fa-user-pen" style="margin-right: 6px;"></i> Edit File
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Stats, Attendance, Billing logs -->
+    <div style="display: flex; flex-direction: column; gap: 32px;">
+        <!-- Student Statistics -->
+        <div class="kpi-grid" style="margin-bottom: 0;">
+            <div class="kpi-card purple" style="padding: 16px 20px;">
+                <div class="kpi-title" style="font-size: 0.75rem;">Attendance Rate</div>
+                <div class="kpi-value" style="font-size: 1.6rem;">{{ attendance_rate }}%</div>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">{{ classes_attended }} / {{ classes_conducted }} attended</span>
+            </div>
+            <div class="kpi-card {% if profile.next_due_date <= today %}rose{% else %}emerald{% endif %}" style="padding: 16px 20px;">
+                <div class="kpi-title" style="font-size: 0.75rem;">Next Due Date</div>
+                <div class="kpi-value" style="font-size: 1.6rem; color: {% if profile.next_due_date <= today %}var(--accent-rose){% else %}var(--accent-emerald){% endif %};">
+                    {{ profile.next_due_date|date:"M d, Y" }}
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">
+                    {% if profile.next_due_date <= today %}OVERDUE PAYMENT{% else %}Payment Current{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Demographics card -->
+        <div class="card-premium">
+            <h3 style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Contact & Institution Details</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.95rem;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">School / College</div>
+                    <strong>{{ profile.school_college }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Email Address</div>
+                    <strong>{{ profile.user.email }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Student Phone</div>
+                    <strong>{{ profile.contact_number }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Parent/Guardian Emergency Contact</div>
+                    <strong>{{ profile.parent_contact }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fee Collection Action & History -->
+        <div class="card-premium">
+            <div class="card-header-flex">
+                <h3>Billing & Fee Transactions</h3>
+                <button onclick="openFeeModal()" class="btn-premium" style="padding: 8px 16px; font-size: 0.85rem;">
+                    <i class="fa-solid fa-dollar-sign" style="margin-right: 6px;"></i> Collect Fee
+                </button>
+            </div>
+            
+            <div class="table-wrapper">
+                <table class="table-premium">
+                    <thead>
+                        <tr>
+                            <th>Date Paid</th>
+                            <th>Amount</th>
+                            <th>Remarks</th>
+                            <th>Recorded By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pay in payments %}
+                        <tr>
+                            <td>{{ pay.payment_date|date:"M d, Y" }}</td>
+                            <td><strong style="color: var(--accent-emerald);">${{ pay.amount_paid }}</strong></td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ pay.remarks|default:"Regular Monthly Payment" }}</td>
+                            <td>{{ pay.collected_by.get_full_name|default:pay.collected_by.username }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 16px;">No payments recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Attendance Logs -->
+        <div class="card-premium">
+            <h3>Attendance Log</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Recent check-in records</p>
+            
+            <div class="table-wrapper">
+                <table class="table-premium">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Check-in Time</th>
+                            <th>Status</th>
+                            <th>Marking Method</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance %}
+                        <tr>
+                            <td>{{ record.date|date:"M d, Y" }}</td>
+                            <td>{{ record.time_in|time:"h:i A" }}</td>
+                            <td>
+                                {% if record.status == 'present' %}
+                                    <span class="badge badge-success">Present</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Absent</span>
+                                {% endif %}
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ record.get_marked_by_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 16px;">No attendance history logged.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fee Collection Modal -->
+<div class="modal-overlay" id="feeCollectionModal">
+    <div class="modal-premium">
+        <button class="modal-close" onclick="closeFeeModal()">&times;</button>
+        <h3 class="modal-title">Record Monthly Payment</h3>
+        <form method="post" action="{% url 'collect_fee' student_id=profile.id %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="fee_amount" class="form-label">Payment Amount ($)</label>
+                <input type="number" step="0.01" name="amount" id="fee_amount" class="form-control" value="{{ profile.monthly_fee }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="next_due" class="form-label">Next Fee Due Date</label>
+                <input type="date" name="next_due_date" id="next_due" class="form-control" required>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label for="fee_remarks" class="form-label">Remarks</label>
+                <input type="text" name="remarks" id="fee_remarks" class="form-control" placeholder="e.g. Paid in cash">
+            </div>
+            
+            <button type="submit" class="btn-premium" style="width: 100%;">
+                Log Fee Collection
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include qrcode.js CDN to generate QR dynamically -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+    // Generate QR code matching token
+    const token = "{{ profile.qr_code_token }}";
+    new QRCode(document.getElementById("qrcode"), {
+        text: token,
+        width: 128,
+        height: 128,
+        colorDark : "#0b0f19",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+
+    const feeModal = document.getElementById('feeCollectionModal');
+    
+    function openFeeModal() {
+        feeModal.style.display = 'flex';
+        // Autofill recommended next due date (+30 days from current next_due_date)
+        const currentDue = new Date("{{ profile.next_due_date|date:'Y-m-d' }}");
+        currentDue.setDate(currentDue.getDate() + 30);
+        const yyyy = currentDue.getFullYear();
+        const mm = String(currentDue.getMonth() + 1).padStart(2, '0');
+        const dd = String(currentDue.getDate()).padStart(2, '0');
+        document.getElementById('next_due').value = `${yyyy}-${mm}-${dd}`;
+    }
+    
+    function closeFeeModal() {
+        feeModal.style.display = 'none';
+    }
+    
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target == feeModal) {
+            closeFeeModal();
+        }
+    }
+</script>
+{% endblock %}

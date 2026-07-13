@@ -1,0 +1,208 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}Collect Fees QR Terminal{% endblock %}
+{% block active_fee_scan %}active{% endblock %}
+{% block page_title %}Fee Collection Terminal{% endblock %}
+
+{% block content %}
+<div class="card-premium" style="max-width: 600px; margin: 0 auto; text-align: center;">
+    <h2 style="margin-bottom: 8px; color: var(--accent-indigo);">Fee Collection QR Scan</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">Scan student's QR card to process monthly fee</p>
+    
+    <div class="scanner-container">
+        <!-- Hidden reader element for library -->
+        <div id="qrReader" style="width: 100%; max-width: 400px; display: none;"></div>
+        
+        <!-- Viewport overlay -->
+        <div class="webcam-viewport scanner-searching" id="scanViewport">
+            <video id="previewVideo" style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+            <div class="webcam-overlay">
+                <div class="scan-line" id="scanLine"></div>
+            </div>
+        </div>
+        
+        <div class="scanner-status" id="scanStatus" style="width: 100%;">
+            Initializing camera stream...
+        </div>
+
+        <button onclick="startScanning()" class="btn-premium" id="toggleScanBtn" style="width: 100%;">
+            Start Scanner
+        </button>
+    </div>
+</div>
+
+<!-- Dynamic Fee Collection Modal -->
+<div class="modal-overlay" id="feeCollectionModal">
+    <div class="modal-premium">
+        <button class="modal-close" onclick="closeFeeModal()">&times;</button>
+        <h3 class="modal-title">Record Monthly Payment</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">
+            Student: <strong style="color: var(--text-primary);" id="modalStudentName">Alice Green</strong><br>
+            Batch: <span id="modalStudentBatch">Morning Science</span>
+        </p>
+        
+        <!-- Form action will be updated dynamically via JS -->
+        <form method="post" id="feeCollectionForm" action="">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="fee_amount" class="form-label">Payment Amount ($)</label>
+                <input type="number" step="0.01" name="amount" id="fee_amount" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="next_due" class="form-label">Next Fee Due Date</label>
+                <input type="date" name="next_due_date" id="next_due" class="form-control" required>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label for="fee_remarks" class="form-label">Remarks</label>
+                <input type="text" name="remarks" id="fee_remarks" class="form-control" placeholder="e.g. Paid in Cash">
+            </div>
+            
+            <button type="submit" class="btn-premium" style="width: 100%;">
+                Log Fee Collection
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include html5-qrcode library from CDN -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+    let html5QrCode = null;
+    let isScanning = false;
+    const scanStatus = document.getElementById('scanStatus');
+    const scanViewport = document.getElementById('scanViewport');
+    const toggleBtn = document.getElementById('toggleScanBtn');
+    const feeModal = document.getElementById('feeCollectionModal');
+
+    function startScanning() {
+        if (isScanning) {
+            stopScanning();
+            return;
+        }
+
+        scanStatus.innerText = "Requesting webcam stream...";
+
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+                html5QrCode = new Html5Qrcode("qrReader");
+                
+                html5QrCode.start(
+                    { facingMode: "environment" }, // Prefer back camera for scanning student card
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }
+                    },
+                    onQrSuccess,
+                    onQrError
+                )
+                .then(() => {
+                    isScanning = true;
+                    toggleBtn.innerText = "Stop Scanner";
+                    toggleBtn.classList.add('btn-danger');
+                    scanStatus.innerText = "Scanner Active. Scanning student QR...";
+                    
+                    // Hook video track to custom viewport
+                    const videoTrack = document.querySelector('#qrReader video');
+                    if (videoTrack) {
+                        const previewVideo = document.getElementById('previewVideo');
+                        previewVideo.srcObject = videoTrack.srcObject;
+                        previewVideo.play();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera.</span>";
+                });
+            } else {
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware detected.</span>";
+            }
+        }).catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera permission error.</span>";
+        });
+    }
+
+    function stopScanning() {
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                toggleBtn.innerText = "Start Scanner";
+                toggleBtn.classList.remove('btn-danger');
+                scanStatus.innerText = "Scanner stopped.";
+                document.getElementById('previewVideo').srcObject = null;
+            }).catch(err => console.error("Failed to stop scanner:", err));
+        }
+    }
+
+    function onQrSuccess(decodedText, decodedResult) {
+        // Pause scanning
+        html5QrCode.pause();
+        scanStatus.innerText = "QR Code detected! Retrieving student record...";
+        
+        // Fetch student details from API
+        fetch(`/api/get-student-qr/${decodedText}/`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Populate modal
+                document.getElementById('modalStudentName').innerText = data.name;
+                document.getElementById('modalStudentBatch').innerText = data.batch;
+                document.getElementById('fee_amount').value = data.monthly_fee;
+                document.getElementById('next_due').value = data.recommended_due_date;
+                
+                // Update form action url dynamically
+                document.getElementById('feeCollectionForm').action = `/student/collect-fee/${data.id}/`;
+                
+                // Open modal
+                openFeeModal();
+                scanStatus.innerText = "Billing modal loaded for " + data.name;
+            } else {
+                scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+                // Resume scanning after 3 seconds
+                setTimeout(() => {
+                    if (isScanning && html5QrCode) {
+                        html5QrCode.resume();
+                        scanStatus.innerText = "Scanning student QR...";
+                    }
+                }, 3000);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Communication error. Resuming...</span>";
+            setTimeout(() => {
+                if (isScanning && html5QrCode) {
+                    html5QrCode.resume();
+                    scanStatus.innerText = "Scanning student QR...";
+                }
+            }, 3000);
+        });
+    }
+
+    function onQrError(err) {}
+
+    function openFeeModal() {
+        feeModal.style.display = 'flex';
+    }
+
+    function closeFeeModal() {
+        feeModal.style.display = 'none';
+        // Resume scanning when modal is closed
+        if (isScanning && html5QrCode) {
+            html5QrCode.resume();
+            scanStatus.innerText = "Scanning student QR...";
+        }
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target == feeModal) {
+            closeFeeModal();
+        }
+    }
+</script>
+{% endblock %}

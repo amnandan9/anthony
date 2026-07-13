@@ -1,0 +1,185 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}Attendance QR Terminal{% endblock %}
+{% block active_att_scan %}active{% endblock %}
+{% block page_title %}Attendance Scanning Terminal{% endblock %}
+
+{% block content %}
+<div class="card-premium" style="max-width: 600px; margin: 0 auto; text-align: center;">
+    <h2 style="margin-bottom: 8px;">Mark Attendance</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">Hold student QR Code in front of the camera</p>
+    
+    <div class="scanner-container">
+        <!-- Hidden reader element for library -->
+        <div id="qrReader" style="width: 100%; max-width: 400px; display: none;"></div>
+        
+        <!-- Viewport overlay -->
+        <div class="webcam-viewport scanner-searching" id="scanViewport">
+            <video id="previewVideo" style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+            <div class="webcam-overlay">
+                <div class="scan-line" id="scanLine"></div>
+            </div>
+        </div>
+        
+        <div class="scanner-status" id="scanStatus" style="width: 100%;">
+            Initializing camera stream...
+        </div>
+        
+        <div id="scanResultCard" style="display: none; width: 100%; padding: 20px; border-radius: 16px; background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); text-align: left;">
+            <h4 style="color: var(--accent-emerald); display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-circle-check"></i> <span id="resultMessage">Success!</span>
+            </h4>
+            <div style="margin-top: 12px; font-size: 0.95rem;">
+                <div style="margin-bottom: 4px;">Student: <strong id="resultStudent">Name</strong></div>
+                <div style="margin-bottom: 4px;">Batch: <span id="resultBatch">Batch</span></div>
+                <div>Checked In: <strong id="resultTime">00:00 AM</strong></div>
+            </div>
+        </div>
+
+        <button onclick="startScanning()" class="btn-premium" id="toggleScanBtn" style="width: 100%;">
+            Start QR Terminal
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include html5-qrcode library from CDN -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+    let html5QrCode = null;
+    let isScanning = false;
+    const scanStatus = document.getElementById('scanStatus');
+    const scanViewport = document.getElementById('scanViewport');
+    const resultCard = document.getElementById('scanResultCard');
+    const toggleBtn = document.getElementById('toggleScanBtn');
+
+    function startScanning() {
+        if (isScanning) {
+            stopScanning();
+            return;
+        }
+
+        scanStatus.innerText = "Requesting webcam stream...";
+        resultCard.style.display = 'none';
+
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+                // Prefer back camera if available, otherwise use default
+                const cameraId = devices[0].id;
+                html5QrCode = new Html5Qrcode("qrReader");
+                
+                html5QrCode.start(
+                    { facingMode: "user" }, // Mirror effect for kiosk check-ins
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }
+                    },
+                    onQrSuccess,
+                    onQrError
+                )
+                .then(() => {
+                    isScanning = true;
+                    toggleBtn.innerText = "Stop Terminal";
+                    toggleBtn.classList.add('btn-danger');
+                    scanStatus.innerText = "Terminal Active. Scanning for QR codes...";
+                    
+                    // Hook video track to custom viewport
+                    const videoTrack = document.querySelector('#qrReader video');
+                    if (videoTrack) {
+                        const previewVideo = document.getElementById('previewVideo');
+                        previewVideo.srcObject = videoTrack.srcObject;
+                        previewVideo.play();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera.</span>";
+                });
+            } else {
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware detected.</span>";
+            }
+        }).catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera permission error.</span>";
+        });
+    }
+
+    function stopScanning() {
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                toggleBtn.innerText = "Start QR Terminal";
+                toggleBtn.classList.remove('btn-danger');
+                scanStatus.innerText = "Terminal stopped.";
+                document.getElementById('previewVideo').srcObject = null;
+            }).catch(err => console.error("Failed to stop scanner:", err));
+        }
+    }
+
+    function onQrSuccess(decodedText, decodedResult) {
+        // Pause scanning to process
+        html5QrCode.pause();
+        scanStatus.innerText = "QR Code detected! Processing check-in...";
+        
+        fetch("{% url 'mark_attendance_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                qr_token: decodedText,
+                marked_by: "{{ user.role }}" === "student" ? "self_qr" : "teacher"
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Show Success
+                resultCard.style.backgroundColor = "rgba(16, 185, 129, 0.08)";
+                resultCard.style.borderColor = "rgba(16, 185, 129, 0.2)";
+                document.getElementById('resultMessage').innerText = data.message;
+                document.getElementById('resultMessage').style.color = "var(--accent-emerald)";
+                document.getElementById('resultStudent').innerText = data.student_name;
+                document.getElementById('resultBatch').innerText = data.batch;
+                document.getElementById('resultTime').innerText = data.time;
+                resultCard.style.display = 'block';
+            } else {
+                // Show Duplicate or Error
+                resultCard.style.backgroundColor = "rgba(245, 158, 11, 0.08)";
+                resultCard.style.borderColor = "rgba(245, 158, 11, 0.2)";
+                document.getElementById('resultMessage').innerText = data.message;
+                document.getElementById('resultMessage').style.color = "var(--accent-amber)";
+                document.getElementById('resultStudent').innerText = data.student_name || "Unknown";
+                document.getElementById('resultBatch').innerText = data.batch || "None";
+                document.getElementById('resultTime').innerText = "Already logged today";
+                resultCard.style.display = 'block';
+            }
+
+            // Resume scanning after 3 seconds
+            setTimeout(() => {
+                if (isScanning && html5QrCode) {
+                    html5QrCode.resume();
+                    scanStatus.innerText = "Scanning for QR codes...";
+                    resultCard.style.display = 'none';
+                }
+            }, 3000);
+        })
+        .catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Server communication error. Resuming...</span>";
+            setTimeout(() => {
+                if (isScanning && html5QrCode) {
+                    html5QrCode.resume();
+                    scanStatus.innerText = "Scanning for QR codes...";
+                }
+            }, 3000);
+        });
+    }
+
+    function onQrError(err) {
+        // Suppress console spam from library checking frame-by-frame
+    }
+</script>
+{% endblock %}

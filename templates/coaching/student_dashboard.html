@@ -1,0 +1,273 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}My Student Portal{% endblock %}
+{% block active_student_dashboard %}active{% endblock %}
+{% block page_title %}Student Portal{% endblock %}
+
+{% block content %}
+<div class="profile-flex-layout">
+    <!-- Left Column: Student card and QR display -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="profile-card-left">
+            <div class="student-avatar" id="avatarContainer">
+                {% if profile.face_data %}
+                    <img src="{{ profile.face_data }}" alt="My Face Profile" id="faceImage">
+                {% else %}
+                    <i class="fa-solid fa-user-graduate" id="userIcon"></i>
+                {% endif %}
+            </div>
+            
+            <h2 style="margin-bottom: 4px;">{{ profile.user.get_full_name }}</h2>
+            <p style="color: var(--accent-indigo); font-weight: 500; font-size: 0.95rem;">{{ profile.batch.name|default:"Unassigned Batch" }}</p>
+            
+            <div style="width: 100%; border-top: 1px solid var(--border-color); margin: 20px 0;"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; font-size: 0.9rem;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Age:</span>
+                    <strong>{{ profile.age }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">School / College:</span>
+                    <strong>{{ profile.school_college }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Joining Date:</span>
+                    <strong>{{ profile.joining_date|date:"M d, Y" }}</strong>
+                </div>
+            </div>
+
+            <!-- QR code to scan at the center -->
+            <div class="qr-display-card" id="studentQrcode" title="Present this QR at the coaching center to mark attendance"></div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500;">MY CHECK-IN QR CODE</p>
+        </div>
+
+        <!-- Facial Verification check-in widget -->
+        <div class="card-premium" style="text-align: center;">
+            <h3 style="margin-bottom: 12px;"><i class="fa-solid fa-face-smile" style="color: var(--accent-indigo); margin-right: 8px;"></i> Face Check-In</h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                {% if profile.face_data %}
+                    Verify your face using your webcam to mark attendance.
+                {% else %}
+                    Register your facial profile to enable instant facial check-ins.
+                {% endif %}
+            </p>
+            <button onclick="openFaceVerificationModal()" class="btn-premium" style="width: 100%;">
+                {% if profile.face_data %}
+                    Verify Face & Check In
+                {% else %}
+                    Register Face Profile
+                {% endif %}
+            </button>
+        </div>
+    </div>
+
+    <!-- Right Column: Personal Stats and Attendance logs -->
+    <div style="display: flex; flex-direction: column; gap: 32px;">
+        <!-- Attendance Stats KPI -->
+        <div class="kpi-grid" style="grid-template-columns: 1fr; margin-bottom: 0;">
+            <div class="kpi-card purple" style="padding: 20px 24px;">
+                <div class="kpi-title">My Attendance Rate</div>
+                <div class="kpi-value" style="font-size: 2.2rem;">{{ attendance_rate }}%</div>
+                <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; display: inline-block;">
+                    Attended <strong>{{ classes_attended }}</strong> out of <strong>{{ classes_conducted }}</strong> scheduled lectures since joining.
+                </span>
+            </div>
+        </div>
+
+        <!-- Profile Demographic Details -->
+        <div class="card-premium">
+            <h3 style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Account Details</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.95rem;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">My Username</div>
+                    <strong>@{{ profile.user.username }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Email Address</div>
+                    <strong>{{ profile.user.email }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Contact Number</div>
+                    <strong>{{ profile.contact_number }}</strong>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">Parent/Guardian Contact</div>
+                    <strong>{{ profile.parent_contact }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Attendance Logs -->
+        <div class="card-premium">
+            <h3>My Attendance Records</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Chronological history of classes</p>
+            
+            <div class="table-wrapper">
+                <table class="table-premium">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time Scanned</th>
+                            <th>Status</th>
+                            <th>Marked Via</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance %}
+                        <tr>
+                            <td>{{ record.date|date:"M d, Y" }}</td>
+                            <td>{{ record.time_in|time:"h:i A" }}</td>
+                            <td><span class="badge badge-success">Present</span></td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ record.get_marked_by_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No attendance logged yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Face Verification/Registration Modal -->
+<div class="modal-overlay" id="faceVerificationModal">
+    <div class="modal-premium" style="max-width: 540px;">
+        <button class="modal-close" onclick="closeFaceVerificationModal()">&times;</button>
+        <h3 class="modal-title" id="faceModalTitle">Facial Attendance Check-In</h3>
+        
+        <div class="scanner-container">
+            <div class="webcam-viewport scanner-searching" id="webcamContainer">
+                <video id="video" width="480" height="360" autoplay playsinline style="width:100%; height:100%; object-fit: cover;"></video>
+                <canvas id="canvas" width="480" height="360" style="display:none;"></canvas>
+                <div class="webcam-overlay">
+                    <div class="scan-line"></div>
+                </div>
+            </div>
+            
+            <div class="scanner-status" id="faceScannerStatus">
+                Initializing camera feed...
+            </div>
+            
+            <button onclick="captureFace()" class="btn-premium" id="faceCaptureBtn" style="width: 100%;" disabled>
+                {% if profile.face_data %}
+                    Perform Facial Scan
+                {% else %}
+                    Register My Face
+                {% endif %}
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+    // Generate QR code matching token
+    const token = "{{ profile.qr_code_token }}";
+    new QRCode(document.getElementById("studentQrcode"), {
+        text: token,
+        width: 128,
+        height: 128,
+        colorDark : "#0b0f19",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+
+    const faceModal = document.getElementById('faceVerificationModal');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const faceScannerStatus = document.getElementById('faceScannerStatus');
+    const faceCaptureBtn = document.getElementById('faceCaptureBtn');
+    let streamInstance = null;
+
+    function openFaceVerificationModal() {
+        faceModal.style.display = 'flex';
+        initWebcam();
+    }
+
+    function closeFaceVerificationModal() {
+        faceModal.style.display = 'none';
+        stopWebcam();
+    }
+
+    function initWebcam() {
+        faceScannerStatus.innerText = "Requesting camera permissions...";
+        faceCaptureBtn.disabled = true;
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(function(stream) {
+                streamInstance = stream;
+                video.srcObject = stream;
+                video.addEventListener('loadedmetadata', () => {
+                    faceScannerStatus.innerText = "Camera active. Center your face in the box.";
+                    faceCaptureBtn.disabled = false;
+                });
+            })
+            .catch(function(err) {
+                console.error("Camera access failed:", err);
+                faceScannerStatus.innerHTML = "<span style='color: var(--accent-rose);'>Could not load camera. Ensure permission is granted.</span>";
+            });
+    }
+
+    function stopWebcam() {
+        if (streamInstance) {
+            streamInstance.getTracks().forEach(track => track.stop());
+            streamInstance = null;
+        }
+        video.srcObject = null;
+    }
+
+    function captureFace() {
+        faceScannerStatus.innerText = "Analyzing facial attributes...";
+        faceCaptureBtn.disabled = true;
+
+        // Capture frame from video onto canvas
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64Image = canvas.toDataURL('image/jpeg');
+
+        // Call Face API
+        fetch("{% url 'verify_face_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                image: base64Image
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                faceScannerStatus.innerHTML = `<span style='color: var(--accent-emerald); font-weight: 600;'>${data.message}</span>`;
+                
+                // If it was registration, reload page after short delay to show avatar
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                faceScannerStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+                faceCaptureBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error("Verification failed:", err);
+            faceScannerStatus.innerHTML = "<span style='color: var(--accent-rose);'>Communication error with verification server.</span>";
+            faceCaptureBtn.disabled = false;
+        });
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target == faceModal) {
+            closeFaceVerificationModal();
+        }
+    }
+</script>
+{% endblock %}

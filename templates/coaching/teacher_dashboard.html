@@ -1,0 +1,332 @@
+{% extends 'coaching/base.html' %}
+
+{% block title %}Teacher Dashboard{% endblock %}
+{% block active_teacher_dashboard %}active{% endblock %}
+{% block page_title %}Teacher Control Panel{% endblock %}
+
+{% block content %}
+<!-- KPI Indicators -->
+<div class="kpi-grid">
+    <div class="kpi-card purple">
+        <div>
+            <div class="kpi-title">Today's Attendance</div>
+            <div class="kpi-value">{{ todays_attendance_rate }}%</div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">{{ todays_present }} / {{ todays_total }} present</span>
+        </div>
+    </div>
+    <div class="kpi-card emerald">
+        <div>
+            <div class="kpi-title">Monthly Collections</div>
+            <div class="kpi-value">${{ monthly_fees_collected|floatformat:2 }}</div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">This calendar month</span>
+        </div>
+    </div>
+    <div class="kpi-card rose">
+        <div>
+            <div class="kpi-title">Overdue Fees</div>
+            <div class="kpi-value">{{ pending_dues_count }}</div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">Students past due date</span>
+        </div>
+    </div>
+    <div class="kpi-card amber">
+        <div>
+            <div class="kpi-title">New Registrations</div>
+            <div class="kpi-value">{{ new_registers_count }}</div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">In the last 30 days</span>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-sections">
+    <!-- Left Column: Student Directory -->
+    <div class="card-premium">
+        <div class="card-header-flex">
+            <h2>Student Directory</h2>
+            <a href="{% url 'register_student' %}" class="btn-premium" style="padding: 8px 16px; font-size: 0.85rem;">
+                <i class="fa-solid fa-user-plus" style="margin-right: 6px;"></i> Register Student
+            </a>
+        </div>
+        
+        <!-- Filters Form -->
+        <form method="get" action="{% url 'teacher_dashboard' %}" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; margin-bottom: 24px; align-items: end;">
+            <div>
+                <label for="q" class="form-label" style="font-size: 0.8rem;">Search Name / College</label>
+                <input type="text" name="q" id="q" class="form-control" style="padding: 8px 12px;" placeholder="Search..." value="{{ search_query }}">
+            </div>
+            <div>
+                <label for="batch" class="form-label" style="font-size: 0.8rem;">Filter Batch</label>
+                <select name="batch" id="batch" class="form-control" style="padding: 8px 12px;">
+                    <option value="">All Batches</option>
+                    {% for batch in batches %}
+                        <option value="{{ batch.id }}" {% if selected_batch == batch.id|stringformat:"i" %}selected{% endif %}>{{ batch.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="due" class="form-label" style="font-size: 0.8rem;">Fee Status</label>
+                <select name="due" id="due" class="form-control" style="padding: 8px 12px;">
+                    <option value="">All Statuses</option>
+                    <option value="overdue" {% if selected_due == 'overdue' %}selected{% endif %}>Overdue Only</option>
+                    <option value="cleared" {% if selected_due == 'cleared' %}selected{% endif %}>Cleared Only</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-premium" style="padding: 10px 16px; font-size: 0.9rem; height: 38px; display: flex; align-items: center;">
+                <i class="fa-solid fa-filter"></i>
+            </button>
+        </form>
+
+        <div class="table-wrapper">
+            <table class="table-premium">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Batch</th>
+                        <th>Next Due</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td>
+                            <strong>{{ student.user.get_full_name }}</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">@{{ student.user.username }}</div>
+                        </td>
+                        <td>{{ student.batch.name|default:"Unassigned" }}</td>
+                        <td>{{ student.next_due_date|date:"M d, Y" }}</td>
+                        <td>
+                            {% if student.next_due_date <= today %}
+                                <span class="badge badge-danger">Overdue</span>
+                            {% else %}
+                                <span class="badge badge-success">Paid</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'student_detail' student_id=student.id %}" class="btn-premium btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
+                                View File
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">No students match the criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Right Column: Calendar & Overdues -->
+    <div style="display: flex; flex-direction: column; gap: 32px;">
+        <!-- Interactive Calendar -->
+        <div class="calendar-widget">
+            <div class="calendar-header">
+                <h3 id="calendarMonthTitle" style="color: var(--accent-indigo);">Month</h3>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-premium btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="prevMonth()"><i class="fa-solid fa-chevron-left"></i></button>
+                    <button class="btn-premium btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="nextMonth()"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid">
+                <!-- Populated dynamically via JS -->
+            </div>
+        </div>
+
+        <!-- Add Schedule Form -->
+        <div class="card-premium" style="padding: 24px;">
+            <h3 style="margin-bottom: 16px;">Schedule Class / Holiday</h3>
+            <form method="post" action="{% url 'add_class_schedule' %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="sched_batch" class="form-label" style="font-size: 0.8rem;">Batch</label>
+                    <select name="batch" id="sched_batch" class="form-control" style="padding: 8px 12px;" required>
+                        {% for batch in batches %}
+                            <option value="{{ batch.id }}">{{ batch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sched_title" class="form-label" style="font-size: 0.8rem;">Title / Event Name</label>
+                    <input type="text" name="title" id="sched_title" class="form-control" style="padding: 8px 12px;" placeholder="e.g. Organic Chemistry Intro" required>
+                </div>
+                <div class="form-grid" style="gap: 12px; margin-bottom: 16px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="sched_date" class="form-label" style="font-size: 0.8rem;">Date</label>
+                        <input type="date" name="date" id="sched_date" class="form-control" style="padding: 8px 12px;" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="sched_start" class="form-label" style="font-size: 0.8rem;">Start Time</label>
+                        <input type="time" name="start_time" id="sched_start" class="form-control" style="padding: 8px 12px;" required>
+                    </div>
+                </div>
+                <div class="form-grid" style="gap: 12px; margin-bottom: 16px; align-items: end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="sched_end" class="form-label" style="font-size: 0.8rem;">End Time</label>
+                        <input type="time" name="end_time" id="sched_end" class="form-control" style="padding: 8px 12px;" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; height: 38px; gap: 8px;">
+                        <input type="checkbox" name="is_holiday" id="sched_holiday">
+                        <label for="sched_holiday" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">Is Holiday</label>
+                    </div>
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 8px 16px; font-size: 0.9rem;">
+                    Add to Calendar
+                </button>
+            </form>
+        </div>
+
+        <!-- Overdue list -->
+        <div class="card-premium" style="padding: 24px;">
+            <h3 style="margin-bottom: 16px; color: var(--accent-rose);">Pending Dues</h3>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                {% for over_std in overdue_students %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.15); border-radius: 12px;">
+                    <div>
+                        <strong style="font-size: 0.9rem;">{{ over_std.user.get_full_name }}</strong>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Fee: ${{ over_std.monthly_fee }}</div>
+                    </div>
+                    <a href="{% url 'student_detail' student_id=over_std.id %}" class="btn-premium" style="padding: 6px 12px; font-size: 0.75rem; background: var(--accent-rose); box-shadow: none;">
+                        Collect
+                    </a>
+                </div>
+                {% empty %}
+                <p style="color: var(--text-secondary); font-size: 0.85rem; text-align: center;">All dues are currently cleared!</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Pass data from Django to JS
+    const classEvents = [
+        {% for cl in calendar_classes %}
+            {
+                title: "{{ cl.title }}",
+                date: "{{ cl.date|date:'Y-m-d' }}",
+                is_holiday: {% if cl.is_holiday %}true{% else %}false{% endif %}
+            },
+        {% endfor %}
+    ];
+
+    const feeDues = [
+        {% for std in students %}
+            {
+                name: "{{ std.user.get_full_name }}",
+                date: "{{ std.next_due_date|date:'Y-m-d' }}"
+            },
+        {% endfor %}
+    ];
+
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    function drawCalendar(year, month) {
+        const grid = document.getElementById('calendarGrid');
+        const title = document.getElementById('calendarMonthTitle');
+        
+        // Clear grid
+        grid.innerHTML = '';
+        
+        title.innerText = `${monthNames[month]} ${year}`;
+        
+        // Add Day Labels
+        const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+        days.forEach(day => {
+            const el = document.createElement('div');
+            el.className = 'calendar-day-label';
+            el.innerText = day;
+            grid.appendChild(el);
+        });
+        
+        const firstDayIndex = new Date(year, month, 1).getDay();
+        const numDays = new Date(year, month + 1, 0).getDate();
+        
+        // Padding for previous month days
+        for (let i = 0; i < firstDayIndex; i++) {
+            const el = document.createElement('div');
+            el.style.opacity = '0';
+            grid.appendChild(el);
+        }
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // Add Days
+        for (let d = 1; d <= numDays; d++) {
+            const dayEl = document.createElement('div');
+            dayEl.className = 'calendar-day';
+            
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            
+            if (dateStr === todayStr) {
+                dayEl.classList.add('today');
+            }
+            
+            dayEl.innerHTML = `<span class="calendar-day-number">${d}</span>`;
+            
+            // Check events
+            const dotsEl = document.createElement('div');
+            dotsEl.className = 'calendar-dots';
+            
+            const dayClasses = classEvents.filter(e => e.date === dateStr);
+            const dayDues = feeDues.filter(e => e.date === dateStr);
+            
+            let hasClass = dayClasses.some(c => !c.is_holiday);
+            let hasHoliday = dayClasses.some(c => c.is_holiday);
+            let hasDue = dayDues.length > 0;
+            
+            if (hasClass) {
+                const dot = document.createElement('div');
+                dot.className = 'dot dot-class';
+                dot.title = dayClasses.map(c => c.title).join(', ');
+                dotsEl.appendChild(dot);
+            }
+            if (hasHoliday) {
+                const dot = document.createElement('div');
+                dot.className = 'dot dot-holiday';
+                dot.title = "Holiday: " + dayClasses.filter(c => c.is_holiday).map(c => c.title).join(', ');
+                dotsEl.appendChild(dot);
+            }
+            if (hasDue) {
+                const dot = document.createElement('div');
+                dot.className = 'dot dot-due';
+                dot.title = "Fee Due: " + dayDues.map(d => d.name).join(', ');
+                dotsEl.appendChild(dot);
+            }
+            
+            dayEl.appendChild(dotsEl);
+            grid.appendChild(dayEl);
+        }
+    }
+
+    function prevMonth() {
+        currentMonth--;
+        if (currentMonth < 0) {
+            currentMonth = 11;
+            currentYear--;
+        }
+        drawCalendar(currentYear, currentMonth);
+    }
+
+    function nextMonth() {
+        currentMonth++;
+        if (currentMonth > 11) {
+            currentMonth = 0;
+            currentYear++;
+        }
+        drawCalendar(currentYear, currentMonth);
+    }
+
+    // Init drawing
+    drawCalendar(currentYear, currentMonth);
+</script>
+{% endblock %}

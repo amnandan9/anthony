@@ -1,0 +1,127 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Coaching Management{% endblock %} | Smart Portal</title>
+    
+    <!-- Premium stylesheet -->
+    <link rel="stylesheet" href="{% static 'coaching/style.css' %}">
+    
+    <!-- Icons (Optional but highly recommended for design aesthetics) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Messages Container -->
+    {% if messages %}
+    <div class="alert-container">
+        {% for message in messages %}
+        <div class="alert-message alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}warning{% endif %}">
+            {% if message.tags == 'success' %}
+                <i class="fa-solid fa-circle-check"></i>
+            {% elif message.tags == 'error' %}
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            {% else %}
+                <i class="fa-solid fa-circle-info"></i>
+            {% endif %}
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <script>
+        // Auto-dismiss alerts after 4 seconds
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert-message');
+            alerts.forEach(alert => {
+                alert.style.transition = 'opacity 0.5s ease';
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 500);
+            });
+        }, 4000);
+    </script>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fa-solid fa-graduation-cap"></i> SmartCoaching
+        </div>
+        <ul class="sidebar-menu">
+            {% if user.role == 'super_admin' or user.is_superuser %}
+                <li>
+                    <a href="{% url 'super_admin_dashboard' %}" class="sidebar-link {% block active_dashboard %}{% endblock %}">
+                        <i class="fa-solid fa-chart-line"></i> Admin Dashboard
+                    </a>
+                </li>
+            {% elif user.role == 'teacher' %}
+                <li>
+                    <a href="{% url 'teacher_dashboard' %}" class="sidebar-link {% block active_teacher_dashboard %}{% endblock %}">
+                        <i class="fa-solid fa-chart-pie"></i> Teacher Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'register_student' %}" class="sidebar-link {% block active_register %}{% endblock %}">
+                        <i class="fa-solid fa-user-plus"></i> Register Student
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_att_scan %}{% endblock %}">
+                        <i class="fa-solid fa-qrcode"></i> Attendance Scanner
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'scanner_fees' %}" class="sidebar-link {% block active_fee_scan %}{% endblock %}">
+                        <i class="fa-solid fa-receipt"></i> Fee Collection Scanner
+                    </a>
+                </li>
+            {% elif user.role == 'student' %}
+                <li>
+                    <a href="{% url 'student_dashboard' %}" class="sidebar-link {% block active_student_dashboard %}{% endblock %}">
+                        <i class="fa-solid fa-user-graduate"></i> My Portal
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_att_scan %}{% endblock %}">
+                        <i class="fa-solid fa-qrcode"></i> Self Attendance Scan
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+        <div class="sidebar-footer">
+            <a href="{% url 'logout' %}" class="sidebar-link" style="color: var(--accent-rose)">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <h3>{% block page_title %}Dashboard{% endblock %}</h3>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="color: var(--text-secondary)">
+                    Welcome, <strong>{{ user.get_full_name|default:user.username }}</strong> 
+                    <span class="badge badge-info" style="margin-left: 8px;">{{ user.get_role_display }}</span>
+                </span>
+            </div>
+        </header>
+        
+        <main class="content-container">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+        <!-- If not authenticated (login page) -->
+        {% block auth_content %}{% endblock %}
+    {% endif %}
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
