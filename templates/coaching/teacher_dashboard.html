@@ -4,6 +4,18 @@
 {% block active_teacher_dashboard %}active{% endblock %}
 {% block page_title %}Teacher Control Panel{% endblock %}
 
+{% block extra_head %}
+<style>
+    .calendar-day.weekend-holiday {
+        border-color: rgba(244, 63, 94, 0.4) !important;
+        background-color: rgba(244, 63, 94, 0.06) !important;
+    }
+    .calendar-day.weekend-holiday .calendar-day-number {
+        color: var(--accent-rose) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- KPI Indicators -->
 <div class="kpi-grid">
@@ -222,6 +234,8 @@
         {% endfor %}
     ];
 
+    const attendanceDates = {{ attendance_dates_json|safe }};
+
     let currentYear = new Date().getFullYear();
     let currentMonth = new Date().getMonth();
 
@@ -269,6 +283,16 @@
             
             if (dateStr === todayStr) {
                 dayEl.classList.add('today');
+            }
+            
+            // Check if day is weekend (Sat/Sun) and has no attendance recorded
+            const dateObj = new Date(year, month, d);
+            const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+            const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+            const hasAttendance = attendanceDates.includes(dateStr);
+            
+            if (isWeekend && !hasAttendance) {
+                dayEl.classList.add('weekend-holiday');
             }
             
             dayEl.innerHTML = `<span class="calendar-day-number">${d}</span>`;
