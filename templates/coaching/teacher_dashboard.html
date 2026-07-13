@@ -17,7 +17,7 @@
     <div class="kpi-card emerald">
         <div>
             <div class="kpi-title">Monthly Collections</div>
-            <div class="kpi-value">${{ monthly_fees_collected|floatformat:2 }}</div>
+            <div class="kpi-value">₹{{ monthly_fees_collected|floatformat:2 }}</div>
             <span style="font-size: 0.8rem; color: var(--text-secondary);">This calendar month</span>
         </div>
     </div>
@@ -185,7 +185,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.15); border-radius: 12px;">
                     <div>
                         <strong style="font-size: 0.9rem;">{{ over_std.user.get_full_name }}</strong>
-                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Fee: ${{ over_std.monthly_fee }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Fee: ₹{{ over_std.monthly_fee }}</div>
                     </div>
                     <a href="{% url 'student_detail' student_id=over_std.id %}" class="btn-premium" style="padding: 6px 12px; font-size: 0.75rem; background: var(--accent-rose); box-shadow: none;">
                         Collect

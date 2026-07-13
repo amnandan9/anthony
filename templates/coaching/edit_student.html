@@ -67,11 +67,40 @@
             </div>
         </div>
         
-        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">3. Fees and Billing Parameters</h4>
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">3. Face Profile Registration</h4>
+        <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 20px; border-radius: 16px; margin-bottom: 24px; text-align: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                <!-- Preview area -->
+                <div style="width: 200px; height: 150px; border-radius: 12px; background-color: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);" id="regCameraArea">
+                    <video id="regVideo" width="200" height="150" autoplay playsinline style="display:none; object-fit: cover;"></video>
+                    <canvas id="regCanvas" width="200" height="150; display:none;" style="display:none;"></canvas>
+                    {% if profile.face_data %}
+                        <img id="regFacePreview" src="{{ profile.face_data }}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <i class="fa-solid fa-camera" id="regCameraIcon" style="font-size: 2.5rem; color: var(--text-secondary); display: none;"></i>
+                    {% else %}
+                        <img id="regFacePreview" style="display:none; width: 100%; height: 100%; object-fit: cover;">
+                        <i class="fa-solid fa-camera" id="regCameraIcon" style="font-size: 2.5rem; color: var(--text-secondary);"></i>
+                    {% endif %}
+                </div>
+                
+                <input type="hidden" name="face_data" id="faceDataInput" value="{{ profile.face_data|default:'' }}">
+                
+                <div style="display: flex; gap: 12px;">
+                    <button type="button" class="btn-premium btn-secondary" id="startRegCamBtn" onclick="startRegCamera()" style="font-size: 0.85rem; padding: 8px 16px;">
+                        <i class="fa-solid fa-video"></i> Start Camera
+                    </button>
+                    <button type="button" class="btn-premium" id="snapRegFaceBtn" onclick="snapRegFace()" style="font-size: 0.85rem; padding: 8px 16px; display: none;">
+                        <i class="fa-solid fa-camera-retro"></i> Capture Snapshot
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">4. Fees and Billing Parameters</h4>
         
         <div class="form-grid" style="margin-bottom: 30px;">
             <div class="form-group">
-                <label for="monthly_fee" class="form-label">Monthly Fee Amount ($)</label>
+                <label for="monthly_fee" class="form-label">Monthly Fee Amount (₹)</label>
                 <input type="number" step="0.01" name="monthly_fee" id="monthly_fee" class="form-control" value="{{ profile.monthly_fee }}" required>
             </div>
             <div class="form-group">
@@ -86,4 +115,56 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Webcam capture scripts
+    let regStream = null;
+    const regVideo = document.getElementById('regVideo');
+    const regCanvas = document.getElementById('regCanvas');
+    const regPreview = document.getElementById('regFacePreview');
+    const regIcon = document.getElementById('regCameraIcon');
+    const startCamBtn = document.getElementById('startRegCamBtn');
+    const snapFaceBtn = document.getElementById('snapRegFaceBtn');
+    const faceInput = document.getElementById('faceDataInput');
+
+    function startRegCamera() {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(stream => {
+                regStream = stream;
+                regVideo.srcObject = stream;
+                regVideo.style.display = 'block';
+                regPreview.style.display = 'none';
+                if (regIcon) regIcon.style.display = 'none';
+                startCamBtn.style.display = 'none';
+                snapFaceBtn.style.display = 'inline-flex';
+            })
+            .catch(err => {
+                console.error("Camera setup failed:", err);
+                alert("Could not start camera. Ensure permissions are granted.");
+            });
+    }
+
+    function snapRegFace() {
+        const ctx = regCanvas.getContext('2d');
+        ctx.drawImage(regVideo, 0, 0, regCanvas.width, regCanvas.height);
+        const dataUrl = regCanvas.toDataURL('image/jpeg');
+        
+        faceInput.value = dataUrl;
+        regPreview.src = dataUrl;
+        
+        regPreview.style.display = 'block';
+        regVideo.style.display = 'none';
+        snapFaceBtn.style.display = 'none';
+        startCamBtn.style.display = 'inline-flex';
+        startCamBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Retake Photo';
+        
+        // Stop camera stream
+        if (regStream) {
+            regStream.getTracks().forEach(track => track.stop());
+            regStream = null;
+        }
+    }
+</script>
 {% endblock %}

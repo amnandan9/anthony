@@ -91,6 +91,11 @@
                     </a>
                 </li>
             {% endif %}
+            <li class="mobile-only">
+                <a href="{% url 'logout' %}" class="sidebar-link" style="color: var(--accent-rose)">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </a>
+            </li>
         </ul>
         <div class="sidebar-footer">
             <a href="{% url 'logout' %}" class="sidebar-link" style="color: var(--accent-rose)">

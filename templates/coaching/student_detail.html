@@ -32,7 +32,7 @@
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--text-secondary);">Monthly Fee:</span>
-                    <strong style="color: var(--accent-indigo);">${{ profile.monthly_fee }}</strong>
+                    <strong style="color: var(--accent-indigo);">₹{{ profile.monthly_fee }}</strong>
                 </div>
             </div>
 
@@ -114,7 +114,7 @@
                         {% for pay in payments %}
                         <tr>
                             <td>{{ pay.payment_date|date:"M d, Y" }}</td>
-                            <td><strong style="color: var(--accent-emerald);">${{ pay.amount_paid }}</strong></td>
+                            <td><strong style="color: var(--accent-emerald);">₹{{ pay.amount_paid }}</strong></td>
                             <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ pay.remarks|default:"Regular Monthly Payment" }}</td>
                             <td>{{ pay.collected_by.get_full_name|default:pay.collected_by.username }}</td>
                         </tr>
@@ -177,7 +177,7 @@
         <form method="post" action="{% url 'collect_fee' student_id=profile.id %}">
             {% csrf_token %}
             <div class="form-group">
-                <label for="fee_amount" class="form-label">Payment Amount ($)</label>
+                <label for="fee_amount" class="form-label">Payment Amount (₹)</label>
                 <input type="number" step="0.01" name="amount" id="fee_amount" class="form-control" value="{{ profile.monthly_fee }}" required>
             </div>
             
