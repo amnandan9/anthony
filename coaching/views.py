@@ -1,6 +1,6 @@
 import json
 import datetime
-from django.shortcuts import render, redirect, get_object_or_454
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -108,7 +108,7 @@ def manage_teacher(request, teacher_id=None):
                 messages.success(request, f"Teacher {user.get_full_name()} successfully registered.")
                 
         elif action == 'toggle_active':
-            teacher = get_object_or_454(User, id=teacher_id, role='teacher')
+            teacher = get_object_or_404(User, id=teacher_id, role='teacher')
             teacher.is_active = not teacher.is_active
             teacher.save()
             status = "activated" if teacher.is_active else "deactivated"
@@ -242,7 +242,7 @@ def register_student(request):
 @login_required
 @teacher_required
 def edit_student(request, student_id):
-    profile = get_object_or_454(StudentProfile, id=student_id)
+    profile = get_object_or_404(StudentProfile, id=student_id)
     batches = Batch.objects.all()
     
     if request.method == 'POST':
@@ -272,7 +272,7 @@ def edit_student(request, student_id):
 @login_required
 @teacher_required
 def student_detail(request, student_id):
-    profile = get_object_or_454(StudentProfile, id=student_id)
+    profile = get_object_or_404(StudentProfile, id=student_id)
     payments = FeePayment.objects.filter(student=profile)
     attendance = AttendanceRecord.objects.filter(student=profile)
     
@@ -306,7 +306,7 @@ def student_detail(request, student_id):
 @teacher_required
 def collect_fee(request, student_id):
     if request.method == 'POST':
-        profile = get_object_or_454(StudentProfile, id=student_id)
+        profile = get_object_or_404(StudentProfile, id=student_id)
         amount = request.POST.get('amount')
         remarks = request.POST.get('remarks', '')
         next_due = request.POST.get('next_due_date')
@@ -336,7 +336,7 @@ def add_class_schedule(request):
         end = request.POST.get('end_time')
         is_holiday = request.POST.get('is_holiday') == 'on'
         
-        batch = get_object_or_454(Batch, id=batch_id)
+        batch = get_object_or_404(Batch, id=batch_id)
         
         ClassSchedule.objects.create(
             batch=batch,
@@ -354,7 +354,7 @@ def add_class_schedule(request):
 @login_required
 @student_required
 def student_dashboard(request):
-    profile = get_object_or_454(StudentProfile, user=request.user)
+    profile = get_object_or_404(StudentProfile, user=request.user)
     attendance = AttendanceRecord.objects.filter(student=profile)
     
     # Calculate Attendance Rate
@@ -434,7 +434,7 @@ def mark_attendance_api(request):
                 'message': 'Attendance marked successfully!',
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
-                'time': record.time_in.strftime('%I:%M %P')
+                'time': record.time_in.strftime('%I:%M %p')
             })
             
         except Exception as e:
@@ -499,7 +499,7 @@ def verify_face_api(request):
                 'is_registration': is_registration,
                 'message': 'Face verification successful! Attendance marked.',
                 'student_name': profile.user.get_full_name(),
-                'time': record.time_in.strftime('%I:%M %P')
+                'time': record.time_in.strftime('%I:%M %p')
             })
             
         except Exception as e:
