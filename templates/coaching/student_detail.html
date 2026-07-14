@@ -263,25 +263,27 @@
         correctLevel : QRCode.CorrectLevel.H
     });
 
-    // Overlay logo on QR code canvas
+    // Overlay logo on QR code canvas (no background, transparent logo only)
     setTimeout(() => {
         const canvas = qrDiv.querySelector("canvas");
         const img = qrDiv.querySelector("img");
         if (canvas) {
             const ctx = canvas.getContext("2d");
             const logo = new Image();
-            logo.src = "{% static 'coaching/logo.png' %}";
+            logo.crossOrigin = "anonymous";
+            logo.src = "{% static 'coaching/logo_transparent.png' %}";
             logo.onload = function() {
+                // 28% of QR width — visible but leaves enough modules for scanning
                 const logoSize = canvas.width * 0.28;
                 const x = (canvas.width - logoSize) / 2;
                 const y = (canvas.height - logoSize) / 2;
-                
-                // Draw logo directly without background
+
+                // Draw logo directly — no white backing, logo.png must have transparent bg
                 ctx.drawImage(logo, x, y, logoSize, logoSize);
-                
-                // Update visible image element source
+
+                // Sync visible <img> element with updated canvas
                 if (img) {
-                    img.src = canvas.toDataURL();
+                    img.src = canvas.toDataURL("image/png");
                 }
             };
         }
