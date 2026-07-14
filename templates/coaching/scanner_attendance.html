@@ -141,8 +141,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Include html5-qrcode library from CDN -->
-<script src="https://unpkg.com/html5-qrcode"></script>
+{% load static %}
+<!-- Include html5-qrcode library locally -->
+<script src="{% static 'coaching/html5-qrcode.min.js' %}"></script>
 <script>
     let html5QrCode = null;
     let faceStream = null;
