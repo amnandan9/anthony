@@ -98,17 +98,17 @@
                     </a>
                 </li>
                 <li>
-                    <a href="{% url 'teacher_dashboard' %}" class="sidebar-link {% block active_teacher_dashboard %}{% endblock %}">
+                    <a href="{% url 'teacher_dashboard' %}" class="sidebar-link {% block active_student_directory %}{% endblock %}">
                         <i class="fa-solid fa-chart-pie"></i> Student Directory
                     </a>
                 </li>
                 <li>
-                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_att_scan %}{% endblock %}">
+                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_att_scan_admin %}{% endblock %}">
                         <i class="fa-solid fa-qrcode"></i> Attendance Scanner
                     </a>
                 </li>
                 <li>
-                    <a href="{% url 'scanner_fees' %}" class="sidebar-link {% block active_fee_scan %}{% endblock %}">
+                    <a href="{% url 'scanner_fees' %}" class="sidebar-link {% block active_fee_scan_admin %}{% endblock %}">
                         <i class="fa-solid fa-receipt"></i> Fee Collection Scanner
                     </a>
                 </li>
