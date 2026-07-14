@@ -12,7 +12,7 @@ import sys
 import os
 
 # ── Add project root to Python path ─────────────────────────────────────────
-path = '/home/anthonycoaching/anthony'
+path = '/home/anthonycoaching/AnthonyCoachingCenter/anthony'
 if path not in sys.path:
     sys.path.insert(0, path)
 
