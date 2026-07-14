@@ -50,9 +50,11 @@
     {% if user.is_authenticated %}
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
-        <div class="sidebar-brand" style="display: flex; align-items: center; gap: 14px; font-size: 1.2rem; padding: 24px 16px;">
-            <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 60px; width: 60px; object-fit: contain; flex-shrink: 0;">
-            <span style="font-weight: 700; line-height: 1.2; white-space: normal;">St. Anthony Coaching Center</span>
+        <div class="sidebar-brand" style="padding: 24px 16px;">
+            <a href="{% url 'dashboard_redirect' %}" style="display: flex; align-items: center; gap: 14px; font-size: 1.2rem; text-decoration: none; color: inherit;">
+                <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 60px; width: 60px; object-fit: contain; flex-shrink: 0;">
+                <span style="font-weight: 700; line-height: 1.2; white-space: normal;">St. Anthony Coaching Center</span>
+            </a>
         </div>
         <div style="padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); background-color: rgba(0,0,0,0.15);">
             <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); cursor: pointer; flex-shrink: 0; position: relative; background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center;" onclick="openProfilePhotoModal()" title="Click to update photo">

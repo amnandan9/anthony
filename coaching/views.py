@@ -26,6 +26,17 @@ def login_view(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
         
+        # Auto-create general scanner account if matching scanner/scanner123 credentials and doesn't exist
+        if username == 'scanner' and password == 'scanner123':
+            if not User.objects.filter(username='scanner').exists():
+                User.objects.create_user(
+                    username='scanner',
+                    password='scanner123',
+                    role='student',
+                    first_name='General',
+                    last_name='Scanner Terminal'
+                )
+        
         user = authenticate(request, username=username, password=password)
         if user is not None:
             if not user.is_active:
@@ -49,6 +60,8 @@ def dashboard_redirect(request):
     elif request.user.role == 'teacher':
         return redirect('teacher_dashboard')
     elif request.user.role == 'student':
+        if request.user.username == 'scanner':
+            return redirect('scanner_attendance')
         return redirect('student_dashboard')
     else:
         return redirect('login')
@@ -478,20 +491,36 @@ def mark_attendance_api(request):
             qr_token = data.get('qr_token')
             marked_by_type = data.get('marked_by', 'teacher')
             
-            profile = StudentProfile.objects.filter(qr_code_token=qr_token).first()
+            profile = StudentProfile.objects.filter(
+                Q(qr_code_token=qr_token) | Q(user__username=qr_token), 
+                user__is_active=True
+            ).first()
             if not profile:
-                return JsonResponse({'success': False, 'message': 'Invalid QR Code. Student not found.'})
+                return JsonResponse({'success': False, 'message': 'Invalid Card Token/QR. Student not found.'})
             
             today = timezone.localdate()
+            
+            # Calculate current month fee status
+            first_of_month = today.replace(day=1)
+            has_paid = FeePayment.objects.filter(
+                student=profile,
+                payment_date__gte=first_of_month,
+                payment_date__lte=today
+            ).exists()
+            fee_status_str = "Paid" if has_paid else "Not Paid"
             
             # Check if already marked for today
             exists = AttendanceRecord.objects.filter(student=profile, date=today).exists()
             if exists:
                 return JsonResponse({
                     'success': False, 
+                    'already_marked': True,
                     'message': f'{profile.user.get_full_name()} is already marked present for today.',
                     'student_name': profile.user.get_full_name(),
-                    'batch': profile.batch.name if profile.batch else 'None'
+                    'batch': profile.batch.name if profile.batch else 'None',
+                    'school': profile.school_college,
+                    'fee_status': fee_status_str,
+                    'face_data': profile.face_data or ''
                 })
                 
             # Create Attendance
@@ -507,7 +536,10 @@ def mark_attendance_api(request):
                 'message': 'Attendance marked successfully!',
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
-                'time': record.time_in.strftime('%I:%M %p')
+                'time': record.time_in.strftime('%I:%M %p'),
+                'school': profile.school_college,
+                'fee_status': fee_status_str,
+                'face_data': profile.face_data or ''
             })
             
         except Exception as e:
@@ -615,6 +647,15 @@ def verify_face_api(request):
                     'face_data': matched_profile.face_data or ''
                 })
 
+            # Calculate current month fee status
+            first_of_month = today.replace(day=1)
+            has_paid = FeePayment.objects.filter(
+                student=matched_profile,
+                payment_date__gte=first_of_month,
+                payment_date__lte=today
+            ).exists()
+            fee_status_str = "Paid" if has_paid else "Not Paid"
+
             # Verify check-in limit (once per day)
             exists = AttendanceRecord.objects.filter(student=matched_profile, date=today).exists()
             if exists:
@@ -624,6 +665,8 @@ def verify_face_api(request):
                     'message': f'{matched_profile.user.get_full_name()} is already marked present for today.',
                     'student_name': matched_profile.user.get_full_name(),
                     'batch': matched_profile.batch.name if matched_profile.batch else 'None',
+                    'school': matched_profile.school_college,
+                    'fee_status': fee_status_str,
                     'face_data': matched_profile.face_data or ''
                 })
                 
@@ -641,6 +684,8 @@ def verify_face_api(request):
                 'student_name': matched_profile.user.get_full_name(),
                 'batch': matched_profile.batch.name if matched_profile.batch else 'None',
                 'time': record.time_in.strftime('%I:%M %p'),
+                'school': matched_profile.school_college,
+                'fee_status': fee_status_str,
                 'face_data': matched_profile.face_data or ''
             })
         except Exception as e:
