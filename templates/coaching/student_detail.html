@@ -266,6 +266,7 @@
     // Overlay logo on QR code canvas
     setTimeout(() => {
         const canvas = qrDiv.querySelector("canvas");
+        const img = qrDiv.querySelector("img");
         if (canvas) {
             const ctx = canvas.getContext("2d");
             const logo = new Image();
@@ -283,6 +284,11 @@
                 
                 // Draw logo
                 ctx.drawImage(logo, x, y, logoSize, logoSize);
+                
+                // Update visible image element source
+                if (img) {
+                    img.src = canvas.toDataURL();
+                }
             };
         }
     }, 500);
