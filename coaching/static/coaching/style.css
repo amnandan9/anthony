@@ -116,14 +116,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .sidebar-brand {
-    padding: 24px;
-    font-size: 1.3rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-brand-link {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 16px;
+    font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.03em;
+    text-decoration: none;
     background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
 }
 
 .sidebar-menu {
@@ -311,11 +319,21 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 500;
 }
 
+/* Prevent browser autofill from overriding dark background colors */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
 .form-control {
     width: 100%;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--bg-secondary) !important;
     border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
     padding: 12px 16px;
     border-radius: 12px;
     font-family: var(--font-outfit);
@@ -323,11 +341,16 @@ h1, h2, h3, h4, h5, h6 {
     transition: all 0.2s ease;
 }
 
+.form-control:hover {
+    border-color: var(--accent-indigo) !important;
+    background-color: rgba(99, 102, 241, 0.06) !important;
+}
+
 .form-control:focus {
     outline: none;
-    border-color: var(--accent-indigo);
-    background-color: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    border-color: var(--accent-indigo) !important;
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
 }
 
 .form-grid {

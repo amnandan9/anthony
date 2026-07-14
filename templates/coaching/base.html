@@ -50,8 +50,8 @@
     {% if user.is_authenticated %}
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
-        <div class="sidebar-brand" style="padding: 24px 16px;">
-            <a href="{% url 'dashboard_redirect' %}" style="display: flex; align-items: center; gap: 14px; font-size: 1.2rem; text-decoration: none; color: inherit;">
+        <div class="sidebar-brand">
+            <a href="{% url 'dashboard_redirect' %}" class="sidebar-brand-link">
                 <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 60px; width: 60px; object-fit: contain; flex-shrink: 0;">
                 <span style="font-weight: 700; line-height: 1.2; white-space: normal;">St. Anthony Coaching Center</span>
             </a>

@@ -2,7 +2,7 @@ import json
 import datetime
 import base64
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageOps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -42,6 +42,12 @@ def login_view(request):
             if not user.is_active:
                 messages.error(request, "This account is inactive. Please contact the administrator.")
                 return render(request, 'coaching/login.html')
+            
+            # Block regular student logins
+            if user.role == 'student' and user.username != 'scanner':
+                messages.error(request, "Student accounts are not allowed to log in directly. Please use the shared scanner terminal to check in.")
+                return render(request, 'coaching/login.html')
+                
             login(request, user)
             return redirect('dashboard_redirect')
         else:
@@ -558,8 +564,16 @@ def compare_faces_pure_python(registered_b64, scanned_b64):
             scanned_b64 = scanned_b64.split(',')[1]
         
         # Decode and load images
-        img1 = Image.open(BytesIO(base64.b64decode(registered_b64))).convert('L').resize((16, 16))
-        img2 = Image.open(BytesIO(base64.b64decode(scanned_b64))).convert('L').resize((16, 16))
+        img1 = Image.open(BytesIO(base64.b64decode(registered_b64))).convert('L')
+        img2 = Image.open(BytesIO(base64.b64decode(scanned_b64))).convert('L')
+        
+        # Normalize contrast and lighting differences
+        img1 = ImageOps.autocontrast(img1)
+        img2 = ImageOps.autocontrast(img2)
+        
+        # Resize to 24x24 for comparison details
+        img1 = img1.resize((24, 24))
+        img2 = img2.resize((24, 24))
         
         pixels1 = list(img1.getdata())
         pixels2 = list(img2.getdata())
@@ -567,8 +581,8 @@ def compare_faces_pure_python(registered_b64, scanned_b64):
         # Mean Absolute Error (MAE) calculation
         mae = sum(abs(p1 - p2) for p1, p2 in zip(pixels1, pixels2)) / len(pixels1)
         
-        # Lower MAE indicates higher similarity. 50 is a solid permissive threshold for webcams.
-        return mae < 50.0, mae
+        # Lower MAE is better. 45.0 is highly accurate after autocontrast normalization.
+        return mae < 45.0, mae
     except Exception as e:
         return False, str(e)
 
