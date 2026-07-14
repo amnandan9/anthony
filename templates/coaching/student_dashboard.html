@@ -196,6 +196,11 @@
     }
 
     function initWebcam() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            faceScannerStatus.innerHTML = "<span style='color: var(--accent-rose);'>Webcam API is blocked on insecure connections. Please access via HTTPS or configure a profile photo in the sidebar.</span>";
+            faceCaptureBtn.disabled = true;
+            return;
+        }
         faceScannerStatus.innerText = "Requesting camera permissions...";
         faceCaptureBtn.disabled = true;
 

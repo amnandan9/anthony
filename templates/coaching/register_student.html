@@ -158,6 +158,10 @@
     const faceInput = document.getElementById('faceDataInput');
 
     function startRegCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Webcam API is blocked on insecure HTTP connections. Please click 'Upload Photo' to upload a file directly.");
+            return;
+        }
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(stream => {
                 regStream = stream;

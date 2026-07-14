@@ -139,8 +139,14 @@ def teacher_dashboard(request):
     # Monthly fee collected
     monthly_fees_collected = FeePayment.objects.filter(payment_date__gte=first_of_month).aggregate(total=Sum('amount_paid'))['total'] or 0.00
     
-    # Pending Dues count and list
-    overdue_students = StudentProfile.objects.filter(next_due_date__lte=today, user__is_active=True)
+    # Pending Dues count and list (active students who haven't paid this month)
+    paid_student_ids = set(
+        FeePayment.objects.filter(
+            payment_date__gte=first_of_month,
+            payment_date__lte=today
+        ).values_list('student_id', flat=True)
+    )
+    overdue_students = StudentProfile.objects.filter(user__is_active=True).exclude(id__in=paid_student_ids)
     pending_dues_count = overdue_students.count()
     
     # Newly registered students (last 30 days)
@@ -162,10 +168,15 @@ def teacher_dashboard(request):
         )
     if batch_filter:
         students = students.filter(batch_id=batch_filter)
+        
     if due_filter == 'overdue':
-        students = students.filter(next_due_date__lte=today)
+        students = students.exclude(id__in=paid_student_ids)
     elif due_filter == 'cleared':
-        students = students.filter(next_due_date__gt=today)
+        students = students.filter(id__in=paid_student_ids)
+
+    # Attach is_paid_this_month helper
+    for student in students:
+        student.is_paid_this_month = student.id in paid_student_ids
 
     # 3. Calendar classes & events
     classes_this_month = ClassSchedule.objects.filter(date__year=today.year, date__month=today.month)

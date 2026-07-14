@@ -166,6 +166,16 @@
 
     // --- QR Scanner implementation ---
     function initQRScan() {
+        if (typeof Html5Qrcode === 'undefined') {
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Scanner library not loaded. Please use manual entry.</span>";
+            document.getElementById('manualCheckinContainer').style.display = 'block';
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera access blocked on insecure connections. Please use manual entry.</span>";
+            document.getElementById('manualCheckinContainer').style.display = 'block';
+            return;
+        }
         scanStatus.innerText = "Requesting webcam for QR scan...";
         Html5Qrcode.getCameras().then(devices => {
             if (devices && devices.length > 0) {
@@ -248,6 +258,11 @@
 
     // --- Face Scanner implementation ---
     function initFaceScan() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Webcam API is blocked on insecure connections. Please use manual check-in.</span>";
+            document.getElementById('manualCheckinContainer').style.display = 'block';
+            return;
+        }
         scanStatus.innerText = "Requesting webcam for Face scan...";
         
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
