@@ -189,17 +189,11 @@
             const logo = new Image();
             logo.src = "{% static 'coaching/logo.png' %}";
             logo.onload = function() {
-                const logoSize = canvas.width * 0.24;
+                const logoSize = canvas.width * 0.28;
                 const x = (canvas.width - logoSize) / 2;
                 const y = (canvas.height - logoSize) / 2;
                 
-                // Draw white boundary background backing under logo
-                ctx.fillStyle = "#ffffff";
-                ctx.beginPath();
-                ctx.roundRect(x - 2, y - 2, logoSize + 4, logoSize + 4, 3);
-                ctx.fill();
-                
-                // Draw logo
+                // Draw logo directly without background
                 ctx.drawImage(logo, x, y, logoSize, logoSize);
                 
                 // Update visible image element source
