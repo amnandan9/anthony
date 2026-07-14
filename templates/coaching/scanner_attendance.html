@@ -190,7 +190,13 @@
                     scanStatus.innerText = "Scanning for QR Code cards...";
                 })
                 .catch(err => {
-                    scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera (Permission denied or blocked).</span>";
+                    scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam access blocked / denied.</span><br>
+                    <span style='font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; display: block; line-height: 1.4; text-align: left;'>
+                        To resolve this:<br>
+                        1. Click the site settings icon in your browser's address bar and set Camera to <strong>Allow</strong>.<br>
+                        2. If accessing over a local network IP, webcams are blocked unless using a secure HTTPS connection.<br>
+                        3. Use the manual card token field below to check in.
+                    </span>`;
                     document.getElementById('manualCheckinContainer').style.display = 'block';
                 });
             } else {
@@ -198,7 +204,13 @@
                 document.getElementById('manualCheckinContainer').style.display = 'block';
             }
         }).catch(err => {
-            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera permission error.</span>";
+            scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam permission error.</span><br>
+            <span style='font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; display: block; line-height: 1.4; text-align: left;'>
+                To resolve this:<br>
+                1. Click the site settings icon in your browser's address bar and set Camera to <strong>Allow</strong>.<br>
+                2. If accessing over a local network IP, webcams are blocked unless using a secure HTTPS connection.<br>
+                3. Use the manual card token field below to check in.
+            </span>`;
             document.getElementById('manualCheckinContainer').style.display = 'block';
         });
     }
@@ -259,7 +271,13 @@
     // --- Face Scanner implementation ---
     function initFaceScan() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Webcam API is blocked on insecure connections. Please use manual check-in.</span>";
+            scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam API blocked on insecure connection.</span><br>
+            <span style='font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; display: block; line-height: 1.4; text-align: left;'>
+                Browsers restrict camera APIs to secure origins (HTTPS or localhost). To resolve this:<br>
+                1. Access this portal via <strong>https://</strong> or <strong>localhost</strong>.<br>
+                2. Use the manual card token field below to check in.
+            </span>`;
+            scanViewport.style.display = 'none';
             document.getElementById('manualCheckinContainer').style.display = 'block';
             return;
         }
@@ -278,7 +296,13 @@
             })
             .catch(err => {
                 console.error(err);
-                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Could not access webcam for face check-in.</span>";
+                scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam Access Error.</span><br>
+                <span style='font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; display: block; line-height: 1.4; text-align: left;'>
+                    Could not start camera feed. Please check:<br>
+                    1. Address bar camera permission is set to <strong>Allow</strong>.<br>
+                    2. Webcam is not being used by another application.
+                </span>`;
+                scanViewport.style.display = 'none';
                 document.getElementById('manualCheckinContainer').style.display = 'block';
             });
     }
