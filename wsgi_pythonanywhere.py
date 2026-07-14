@@ -12,14 +12,14 @@ import sys
 import os
 
 # ── Add project root to Python path ─────────────────────────────────────────
-path = '/home/YOURUSERNAME/anthony'   # ← change YOURUSERNAME
+path = '/home/anthonycoaching/anthony'
 if path not in sys.path:
     sys.path.insert(0, path)
 
 # ── Environment variables (set once here, or use a .env file) ────────────────
-os.environ['SECRET_KEY']     = 'CHANGE-ME-TO-A-LONG-RANDOM-STRING'
+os.environ['SECRET_KEY']     = 'bs5niv&7a@^!iw^&y^jiw664%7#_nn21ki4*xnu(7#k&ds38x$'
 os.environ['DEBUG']          = 'False'
-os.environ['ALLOWED_HOSTS']  = 'YOURUSERNAME.pythonanywhere.com'
+os.environ['ALLOWED_HOSTS']  = 'anthonycoaching.pythonanywhere.com'
 
 # ── Point Django at our settings ─────────────────────────────────────────────
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'coaching_center.settings')
