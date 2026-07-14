@@ -250,8 +250,8 @@
 <!-- Include qrcode.js CDN to generate QR dynamically -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-    // Generate QR code matching token
-    const token = "{{ profile.qr_code_token }}";
+    // Generate QR code matching unique student ID
+    const token = "{{ profile.user.username }}";
     new QRCode(document.getElementById("qrcode"), {
         text: token,
         width: 128,

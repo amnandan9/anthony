@@ -51,6 +51,19 @@
         <div class="sidebar-brand">
             <i class="fa-solid fa-graduation-cap"></i> SmartCoaching
         </div>
+        <div style="padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); background-color: rgba(0,0,0,0.15);">
+            <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); cursor: pointer; flex-shrink: 0; position: relative; background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center;" onclick="openProfilePhotoModal()" title="Click to update photo">
+                {% if user.face_data %}
+                    <img id="sidebarUserPhoto" src="{{ user.face_data }}" style="width: 100%; height: 100%; object-fit: cover;">
+                {% else %}
+                    <i class="fa-solid fa-user-gear" style="font-size: 1.2rem; color: var(--text-secondary);"></i>
+                {% endif %}
+            </div>
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">{{ user.get_full_name|default:user.username }}</div>
+                <div style="font-size: 0.7rem; color: var(--accent-indigo); text-transform: uppercase;">{{ user.get_role_display|default:user.role }}</div>
+            </div>
+        </div>
         <ul class="sidebar-menu">
             {% if user.role == 'super_admin' or user.is_superuser %}
                 <li>
@@ -127,6 +140,160 @@
         {% block auth_content %}{% endblock %}
     {% endif %}
 
+    <!-- Profile Photo Upload Modal -->
+    <div class="modal-overlay" id="profilePhotoModal" style="z-index: 2000;">
+        <div class="modal-premium" style="max-width: 440px;">
+            <button class="modal-close" onclick="closeProfilePhotoModal()">&times;</button>
+            <h3 class="modal-title">Update Profile Photo</h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">Take a live snapshot or select an image file.</p>
+            
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div style="width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); background-color: #000; display: flex; align-items: center; justify-content: center; position: relative;">
+                    <video id="profVideo" width="160" height="160" autoplay playsinline style="display:none; object-fit: cover; transform: scaleX(-1);"></video>
+                    <canvas id="profCanvas" width="160" height="160" style="display:none;"></canvas>
+                    {% if user.face_data %}
+                        <img id="profPreview" src="{{ user.face_data }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    {% else %}
+                        <img id="profPreview" style="display:none; width: 100%; height: 100%; object-fit: cover;">
+                        <i class="fa-solid fa-camera" id="profIcon" style="font-size: 2.5rem; color: var(--text-secondary);"></i>
+                    {% endif %}
+                </div>
+                
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                    <button type="button" class="btn-premium btn-secondary" id="startProfCamBtn" onclick="startProfCamera()" style="font-size: 0.8rem; padding: 8px 12px;">
+                        <i class="fa-solid fa-video"></i> Start Camera
+                    </button>
+                    <button type="button" class="btn-premium" id="snapProfBtn" onclick="snapProfPhoto()" style="font-size: 0.8rem; padding: 8px 12px; display: none;">
+                        <i class="fa-solid fa-camera-retro"></i> Snap
+                    </button>
+                    <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('profFileInput').click()" style="font-size: 0.8rem; padding: 8px 12px;">
+                        <i class="fa-solid fa-file-image"></i> Upload File
+                    </button>
+                    <input type="file" accept="image/*" id="profFileInput" style="display: none;" onchange="handleProfFileSelect(this)">
+                </div>
+            </div>
+            
+            <button type="button" class="btn-premium" onclick="saveProfilePhoto()" style="width: 100%;">
+                Save Profile Photo
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let profStream = null;
+        const profModal = document.getElementById('profilePhotoModal');
+        const profVideo = document.getElementById('profVideo');
+        const profCanvas = document.getElementById('profCanvas');
+        const profPreview = document.getElementById('profPreview');
+        const profIcon = document.getElementById('profIcon');
+        const startProfBtn = document.getElementById('startProfCamBtn');
+        const snapProfBtn = document.getElementById('snapProfBtn');
+        
+        let base64ProfData = null;
+
+        function openProfilePhotoModal() {
+            if (profModal) profModal.style.display = 'flex';
+        }
+
+        function closeProfilePhotoModal() {
+            if (profModal) profModal.style.display = 'none';
+            stopProfCamera();
+        }
+
+        function startProfCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(stream => {
+                    profStream = stream;
+                    profVideo.srcObject = stream;
+                    profVideo.style.display = 'block';
+                    profPreview.style.display = 'none';
+                    if (profIcon) profIcon.style.display = 'none';
+                    startProfBtn.style.display = 'none';
+                    snapProfBtn.style.display = 'inline-flex';
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Camera permission blocked or hardware missing. Please use file upload.");
+                });
+        }
+
+        function stopProfCamera() {
+            if (profStream) {
+                profStream.getTracks().forEach(track => track.stop());
+                profStream = null;
+            }
+            if (profVideo) profVideo.srcObject = null;
+        }
+
+        function snapProfPhoto() {
+            const ctx = profCanvas.getContext('2d');
+            ctx.translate(profCanvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(profVideo, 0, 0, profCanvas.width, profCanvas.height);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            base64ProfData = profCanvas.toDataURL('image/jpeg');
+            profPreview.src = base64ProfData;
+            profPreview.style.display = 'block';
+            profVideo.style.display = 'none';
+            snapProfBtn.style.display = 'none';
+            startProfBtn.style.display = 'inline-flex';
+            startProfBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Retake Photo';
+            stopProfCamera();
+        }
+
+        function handleProfFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    base64ProfData = e.target.result;
+                    profPreview.src = base64ProfData;
+                    profPreview.style.display = 'block';
+                    if (profVideo) profVideo.style.display = 'none';
+                    if (profIcon) profIcon.style.display = 'none';
+                    startProfBtn.style.display = 'inline-flex';
+                    startProfBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Retake Photo';
+                    snapProfBtn.style.display = 'none';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function saveProfilePhoto() {
+            if (!base64ProfData) {
+                alert("Please snap a photo or upload an image first.");
+                return;
+            }
+            
+            fetch("{% url 'update_profile_photo_api' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ image: base64ProfData })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    const sidebarImg = document.getElementById('sidebarUserPhoto');
+                    if (sidebarImg) {
+                        sidebarImg.src = base64ProfData;
+                    } else {
+                        location.reload();
+                    }
+                    closeProfilePhotoModal();
+                } else {
+                    alert("Error saving: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Server error saving profile photo.");
+            });
+        }
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

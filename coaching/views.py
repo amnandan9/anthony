@@ -600,7 +600,8 @@ def verify_face_api(request):
                     'student_name': matched_profile.user.get_full_name(),
                     'batch': matched_profile.batch.name if matched_profile.batch else 'None',
                     'monthly_fee': str(matched_profile.monthly_fee),
-                    'recommended_due_date': (matched_profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+                    'recommended_due_date': (matched_profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d'),
+                    'face_data': matched_profile.face_data or ''
                 })
 
             # Verify check-in limit (once per day)
@@ -611,7 +612,8 @@ def verify_face_api(request):
                     'already_marked': True,
                     'message': f'{matched_profile.user.get_full_name()} is already marked present for today.',
                     'student_name': matched_profile.user.get_full_name(),
-                    'batch': matched_profile.batch.name if matched_profile.batch else 'None'
+                    'batch': matched_profile.batch.name if matched_profile.batch else 'None',
+                    'face_data': matched_profile.face_data or ''
                 })
                 
             # Record Attendance
@@ -627,7 +629,8 @@ def verify_face_api(request):
                 'message': 'Face verification successful!',
                 'student_name': matched_profile.user.get_full_name(),
                 'batch': matched_profile.batch.name if matched_profile.batch else 'None',
-                'time': record.time_in.strftime('%I:%M %p')
+                'time': record.time_in.strftime('%I:%M %p'),
+                'face_data': matched_profile.face_data or ''
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
@@ -638,9 +641,13 @@ def verify_face_api(request):
 @teacher_required
 def get_student_by_qr(request, qr_token):
     """
-    Find student by QR code and return details for AJAX fee collection.
+    Find student by QR code token or unique username, and return details for AJAX fee collection.
     """
-    profile = StudentProfile.objects.filter(qr_code_token=qr_token, user__is_active=True).first()
+    profile = StudentProfile.objects.filter(
+        Q(qr_code_token=qr_token) | Q(user__username=qr_token), 
+        user__is_active=True
+    ).first()
+    
     if profile:
         return JsonResponse({
             'success': True,
@@ -649,6 +656,37 @@ def get_student_by_qr(request, qr_token):
             'batch': profile.batch.name if profile.batch else 'None',
             'monthly_fee': str(profile.monthly_fee),
             'next_due_date': profile.next_due_date.strftime('%Y-%m-%d'),
-            'recommended_due_date': (profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+            'recommended_due_date': (profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d'),
+            'face_data': profile.face_data or ''
         })
     return JsonResponse({'success': False, 'message': 'Student not found or inactive.'})
+
+@csrf_exempt
+@login_required
+def update_profile_photo_api(request):
+    """
+    Allows any logged-in user (Teacher, Student, Admin) to update their profile photo.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            image_data = data.get('image')
+            if not image_data:
+                return JsonResponse({'success': False, 'message': 'No image data provided.'})
+            
+            # Save to user account
+            request.user.face_data = image_data
+            request.user.save()
+            
+            # If user is a student, sync to student profile too
+            if request.user.role == 'student':
+                profile = StudentProfile.objects.filter(user=request.user).first()
+                if profile:
+                    profile.face_data = image_data
+                    profile.save()
+                    
+            return JsonResponse({'success': True, 'message': 'Profile photo updated successfully!'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+            
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})

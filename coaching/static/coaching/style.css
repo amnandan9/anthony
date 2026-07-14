@@ -825,3 +825,12 @@ select.form-control option {
         font-size: 1.1rem;
     }
 }
+
+/* Viewport and frame containment safety rules to prevent screen overflow */
+.main-wrapper, .content-container, .card-premium, .kpi-grid, .dashboard-sections, .profile-flex-layout, .table-wrapper {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+img, video, canvas {
+    max-width: 100% !important;
+}

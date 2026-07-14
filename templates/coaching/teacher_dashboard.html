@@ -78,8 +78,8 @@
                 <label for="due" class="form-label" style="font-size: 0.8rem;">Fee Status</label>
                 <select name="due" id="due" class="form-control" style="padding: 8px 12px;">
                     <option value="">All Statuses</option>
-                    <option value="overdue" {% if selected_due == 'overdue' %}selected{% endif %}>Overdue Only</option>
-                    <option value="cleared" {% if selected_due == 'cleared' %}selected{% endif %}>Cleared Only</option>
+                    <option value="overdue" {% if selected_due == 'overdue' %}selected{% endif %}>Not Paid</option>
+                    <option value="cleared" {% if selected_due == 'cleared' %}selected{% endif %}>Paid</option>
                 </select>
             </div>
             <button type="submit" class="btn-premium" style="padding: 10px 16px; font-size: 0.9rem; height: 38px; display: flex; align-items: center;">
@@ -109,7 +109,7 @@
                         <td>{{ student.next_due_date|date:"M d, Y" }}</td>
                         <td>
                             {% if student.next_due_date <= today %}
-                                <span class="badge badge-danger">Overdue</span>
+                                <span class="badge badge-danger">Not Paid</span>
                             {% else %}
                                 <span class="badge badge-success">Paid</span>
                             {% endif %}

@@ -83,11 +83,19 @@
 <div class="modal-overlay" id="feeCollectionModal">
     <div class="modal-premium">
         <button class="modal-close" onclick="closeFeeModal()">&times;</button>
-        <h3 class="modal-title">Record Monthly Payment</h3>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">
-            Student: <strong style="color: var(--text-primary);" id="modalStudentName">Alice Green</strong><br>
-            Batch: <span id="modalStudentBatch">Morning Science</span>
-        </p>
+        <h3 class="modal-title" style="margin-bottom: 16px;">Record Monthly Payment</h3>
+        
+        <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 24px; background-color: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 16px; border: 1px solid var(--border-color); text-align: left;">
+            <div style="width: 60px; height: 75px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background-color: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                <img id="modalStudentPhoto" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                <i class="fa-solid fa-user" id="modalStudentPhotoPlaceholder" style="font-size: 1.5rem; color: var(--text-secondary);"></i>
+            </div>
+            <div>
+                <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Student Profile</span>
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" id="modalStudentName">Alice Green</div>
+                <div style="font-size: 0.85rem; color: var(--accent-indigo);" id="modalStudentBatch">Morning Science</div>
+            </div>
+        </div>
         
         <form method="post" id="feeCollectionForm" action="">
             {% csrf_token %}
@@ -192,13 +200,16 @@
                     scanStatus.innerText = "Scanning student QR card...";
                 })
                 .catch(err => {
-                    scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera.</span>";
+                    scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Failed to start camera (Permission denied or blocked).</span>";
+                    document.getElementById('manualCheckinContainer').style.display = 'block';
                 });
             } else {
                 scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware found.</span>";
+                document.getElementById('manualCheckinContainer').style.display = 'block';
             }
         }).catch(err => {
             scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Camera permission error.</span>";
+            document.getElementById('manualCheckinContainer').style.display = 'block';
         });
     }
 
@@ -265,6 +276,7 @@
             .catch(err => {
                 console.error(err);
                 scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Could not access webcam for face detection.</span>";
+                document.getElementById('manualCheckinContainer').style.display = 'block';
             });
     }
 
@@ -373,6 +385,15 @@
         document.getElementById('modalStudentBatch').innerText = data.batch;
         document.getElementById('fee_amount').value = data.monthly_fee;
         document.getElementById('next_due').value = data.recommended_due_date;
+        
+        if (data.face_data) {
+            document.getElementById('modalStudentPhoto').src = data.face_data;
+            document.getElementById('modalStudentPhoto').style.display = 'block';
+            document.getElementById('modalStudentPhotoPlaceholder').style.display = 'none';
+        } else {
+            document.getElementById('modalStudentPhoto').style.display = 'none';
+            document.getElementById('modalStudentPhotoPlaceholder').style.display = 'block';
+        }
         
         document.getElementById('feeCollectionForm').action = `/student/collect-fee/${data.id}/`;
         

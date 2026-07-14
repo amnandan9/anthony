@@ -10,6 +10,7 @@ class User(AbstractUser):
         ('student', 'Student'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
+    face_data = models.TextField(blank=True, null=True, help_text="Base64 encoded profile photo for user accounts")
 
     def is_super_admin(self):
         return self.role == 'super_admin' or self.is_superuser

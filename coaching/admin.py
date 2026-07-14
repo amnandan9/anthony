@@ -9,10 +9,10 @@ class CustomUserAdmin(UserAdmin):
     list_filter = ('role', 'is_active', 'is_staff', 'is_superuser')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     fieldsets = UserAdmin.fieldsets + (
-        ('Role Parameters', {'fields': ('role',)}),
+        ('Role & Profile Parameters', {'fields': ('role', 'face_data')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Role Parameters', {'fields': ('role',)}),
+        ('Role & Profile Parameters', {'fields': ('role', 'face_data')}),
     )
 
 @admin.register(Batch)
