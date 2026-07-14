@@ -50,13 +50,20 @@
 </div>
 
 <div class="dashboard-sections">
-    <!-- Left Column: Student Directory -->
     <div class="card-premium">
-        <div class="card-header-flex">
+        <div class="card-header-flex" style="flex-wrap: wrap; gap: 8px;">
             <h2>Student Directory</h2>
-            <a href="{% url 'register_student' %}" class="btn-premium" style="padding: 8px 16px; font-size: 0.85rem;">
-                <i class="fa-solid fa-user-plus" style="margin-right: 6px;"></i> Register Student
-            </a>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <a href="{% if selected_batch %}{% url 'print_qr_sheet_batch' batch_id=selected_batch %}{% else %}{% url 'print_qr_sheet' %}{% endif %}" target="_blank" class="btn-premium btn-secondary" style="padding: 8px 12px; font-size: 0.8rem; display: inline-flex; align-items: center;">
+                    <i class="fa-solid fa-print" style="margin-right: 6px;"></i> Print QRs
+                </a>
+                <a href="{% url 'export_attendance_csv' %}{% if selected_batch %}?batch={{ selected_batch }}{% endif %}" class="btn-premium btn-secondary" style="padding: 8px 12px; font-size: 0.8rem; display: inline-flex; align-items: center;">
+                    <i class="fa-solid fa-file-csv" style="margin-right: 6px;"></i> Export Attendance
+                </a>
+                <a href="{% url 'register_student' %}" class="btn-premium" style="padding: 8px 12px; font-size: 0.8rem; display: inline-flex; align-items: center;">
+                    <i class="fa-solid fa-user-plus" style="margin-right: 6px;"></i> Register
+                </a>
+            </div>
         </div>
         
         <!-- Filters Form -->

@@ -1,19 +1,21 @@
 import json
 import datetime
 import base64
+import csv
 from io import BytesIO
 from PIL import Image, ImageOps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule
 from coaching.decorators import super_admin_required, teacher_required, student_required, role_required
+
 
 
 # --- Authentication Views ---
@@ -571,40 +573,50 @@ def compare_faces_pure_python(registered_b64, scanned_b64):
 def verify_face_api(request):
     """
     API endpoint that verifies a student's face profile.
-    If username/student is specific, validates them.
-    If general, scans all active students to match.
+    Supports linked QR token verification: if qr_token is passed in request body,
+    directly resolves the student and compares face.
     """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             image_data = data.get('image') # Base64 Image string
             username = data.get('username')
+            qr_token = data.get('qr_token')
             
             today = timezone.localdate()
+            matched_profile = None
             
-            # Scenario 1: Target username specified (e.g. self check-in from student dashboard)
-            if username or (request.user.role == 'student'):
-                target_user = request.user
-                if username and request.user.role == 'teacher':
-                    target_user = User.objects.filter(username=username).first()
+            # Scenario 1: Target username or qr_token specified (linked verification)
+            if qr_token or username or (request.user.role == 'student'):
+                profile = None
+                if qr_token:
+                    profile = StudentProfile.objects.filter(
+                        Q(qr_code_token=qr_token) | Q(user__username=qr_token),
+                        user__is_active=True
+                    ).first()
+                elif username:
+                    user_obj = User.objects.filter(username=username).first()
+                    if user_obj:
+                        profile = StudentProfile.objects.filter(user=user_obj).first()
+                elif request.user.role == 'student':
+                    profile = StudentProfile.objects.filter(user=request.user).first()
                 
-                if not target_user:
-                    return JsonResponse({'success': False, 'message': 'Student account not found.'})
-                    
-                profile = StudentProfile.objects.filter(user=target_user).first()
                 if not profile:
-                    return JsonResponse({'success': False, 'message': 'Student profile not found.'})
+                    return JsonResponse({'success': False, 'message': 'Student profile not found or inactive.'})
                 
-                # If face_data is not registered, save it (Registration mode)
+                # If face_data is not registered, save it (Registration mode) only if teacher/super_admin is registering
                 if not profile.face_data:
-                    profile.face_data = image_data
-                    profile.save()
-                    return JsonResponse({
-                        'success': True,
-                        'is_registration': True,
-                        'message': 'Face registered successfully!',
-                        'student_name': profile.user.get_full_name()
-                    })
+                    if request.user.role in ['teacher', 'super_admin'] and not qr_token:
+                        profile.face_data = image_data
+                        profile.save()
+                        return JsonResponse({
+                            'success': True,
+                            'is_registration': True,
+                            'message': 'Face registered successfully!',
+                            'student_name': profile.user.get_full_name()
+                        })
+                    else:
+                        return JsonResponse({'success': False, 'message': 'Face photo not registered by teacher. Please contact admin.'})
                 
                 # Perform matching
                 match, mae = compare_faces_pure_python(profile.face_data, image_data)
@@ -740,3 +752,66 @@ def update_profile_photo_api(request):
             return JsonResponse({'success': False, 'message': str(e)})
             
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
+
+
+@login_required
+@role_required('teacher', 'super_admin')
+def print_qr_sheet(request, batch_id=None):
+    """
+    Renders print-optimised list of students with QR codes (3x3 layout).
+    """
+    if batch_id:
+        batch = get_object_or_404(Batch, id=batch_id)
+        students = StudentProfile.objects.filter(batch=batch, user__is_active=True).order_by('user__first_name')
+        title = f"QR Cards - {batch.name}"
+    else:
+        students = StudentProfile.objects.filter(user__is_active=True).order_by('batch__name', 'user__first_name')
+        title = "All Student QR Cards"
+    
+    return render(request, 'coaching/print_qr.html', {
+        'students': students,
+        'title': title
+    })
+
+
+@login_required
+@role_required('teacher', 'super_admin')
+def export_attendance_csv(request):
+    """
+    Exports attendance records for active students as a downloadable CSV.
+    """
+    # Get parameters
+    batch_id = request.GET.get('batch')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    records = AttendanceRecord.objects.all()
+    
+    if batch_id:
+        records = records.filter(student__batch_id=batch_id)
+    if start_date_str:
+        records = records.filter(date__gte=start_date_str)
+    if end_date_str:
+        records = records.filter(date__lte=end_date_str)
+        
+    records = records.select_related('student__user', 'student__batch').order_by('-date', 'student__user__first_name')
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate().strftime("%Y-%m-%d")}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'Student ID (Username)', 'Student Name', 'Batch', 'Check-In Time', 'Status', 'Marked By'])
+    
+    for r in records:
+        writer.writerow([
+            r.date.strftime('%Y-%m-%d'),
+            r.student.user.username,
+            r.student.user.get_full_name(),
+            r.student.batch.name if r.student.batch else 'None',
+            r.time_in.strftime('%I:%M %p') if r.time_in else '-',
+            r.get_status_display(),
+            r.get_marked_by_display()
+        ])
+        
+    return response
+

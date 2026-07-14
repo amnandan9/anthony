@@ -29,6 +29,13 @@ urlpatterns = [
     path('scanner/attendance/', views.scanner_attendance, name='scanner_attendance'),
     path('scanner/fees/', views.scanner_fees, name='scanner_fees'),
     
+    # QR Print Sheet
+    path('print/qr/', views.print_qr_sheet, name='print_qr_sheet'),
+    path('print/qr/<str:batch_id>/', views.print_qr_sheet, name='print_qr_sheet_batch'),
+    
+    # Export
+    path('export/attendance/', views.export_attendance_csv, name='export_attendance_csv'),
+
     # AJAX API Endpoints
     path('api/mark-attendance/', views.mark_attendance_api, name='mark_attendance_api'),
     path('api/verify-face/', views.verify_face_api, name='verify_face_api'),

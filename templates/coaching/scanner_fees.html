@@ -45,6 +45,13 @@
         </button>
     </div>
 
+    <!-- Flip Camera Button -->
+    <div style="margin-bottom: 20px; text-align: center;">
+        <button onclick="toggleCameraFacing()" class="btn-premium btn-secondary" id="flipCameraBtn" style="padding: 8px 16px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-camera-rotate"></i> Flip Camera
+        </button>
+    </div>
+
     <div class="scanner-container">
         <!-- QR Scanner viewport -->
         <div id="qrReader" style="width: 100%; display: block;"></div>
@@ -132,6 +139,8 @@
     let faceInterval = null;
     let currentMode = 'qr';
     let isProcessing = false;
+    let currentFacingMode = "user"; // "user" or "environment"
+    let pendingToken = null; // linked verification student token
 
     const scanStatus = document.getElementById('scanStatus');
     const scanViewport = document.getElementById('scanViewport');
@@ -160,10 +169,33 @@
         }
     }
 
+    // Camera Flip Function
+    function toggleCameraFacing() {
+        currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+        scanStatus.innerText = "Switching camera view...";
+        if (currentMode === 'qr') {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode = null;
+                    initQRScan();
+                }).catch(err => {
+                    console.error(err);
+                    initQRScan();
+                });
+            } else {
+                initQRScan();
+            }
+        } else {
+            stopFaceScan();
+            initFaceScan();
+        }
+    }
+
     // Toggle Modes
     function setMode(mode) {
         if (mode === currentMode) return;
         currentMode = mode;
+        pendingToken = null; // Reset linked token
         
         if (mode === 'qr') {
             document.getElementById('modeQrBtn').className = "btn-premium";
@@ -208,7 +240,7 @@
             if (devices && devices.length > 0) {
                 html5QrCode = new Html5Qrcode("qrReader");
                 html5QrCode.start(
-                    { facingMode: "user" }, // Front/user camera is universally supported on laptops/TVs/mobiles
+                    { facingMode: currentFacingMode },
                     { fps: 10, qrbox: { width: 250, height: 250 } },
                     onQrSuccess,
                     onQrError
@@ -256,36 +288,44 @@
     function onQrSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
         isProcessing = true;
-        html5QrCode.pause();
         
         scanStatus.innerText = "QR Code detected! Fetching student billing...";
         
         fetch(`/api/get-student-qr/${decodedText}/`)
         .then(res => res.json())
         .then(data => {
-            playBeep(); // Play confirmation beep
-            isProcessing = false;
-            
             if (data.success) {
-                loadFeeModal(data);
+                pendingToken = decodedText;
+                
+                scanStatus.innerHTML = `<span style='color: var(--accent-indigo); font-weight: 600;'>QR Matched: ${data.name}</span><br>Please look at the camera to verify your face...`;
+                playBeep(); // Beep on QR scan
+                
+                setTimeout(() => {
+                    stopQRScan();
+                    qrReaderDiv.style.display = 'none';
+                    scanViewport.style.display = 'block';
+                    currentMode = 'face';
+                    
+                    // Update visual state buttons
+                    document.getElementById('modeFaceBtn').className = "btn-premium";
+                    document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
+                    
+                    isProcessing = false;
+                    initFaceScan();
+                }, 1000);
             } else {
                 scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
                 setTimeout(() => {
-                    if (currentMode === 'qr' && html5QrCode) {
-                        html5QrCode.resume();
-                        scanStatus.innerText = "Scanning student QR card...";
-                    }
-                }, 3000);
+                    isProcessing = false;
+                }, 2000);
             }
         })
         .catch(err => {
             isProcessing = false;
             scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Connection error. Resuming...</span>";
             setTimeout(() => {
-                if (currentMode === 'qr' && html5QrCode) {
-                    html5QrCode.resume();
-                }
-            }, 3000);
+                isProcessing = false;
+            }, 2000);
         });
     }
 
@@ -304,13 +344,20 @@
             document.getElementById('manualCheckinContainer').style.display = 'block';
             return;
         }
-        scanStatus.innerText = "Requesting webcam for Face scan...";
+        scanStatus.innerText = pendingToken ? "Starting face scanner for linked verification..." : "Requesting webcam for Face scan...";
         
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } })
             .then(stream => {
                 faceStream = stream;
                 previewVideo.srcObject = stream;
                 previewVideo.play();
+                
+                // Adjust mirror overlay if rear camera
+                if (currentFacingMode === "environment") {
+                    previewVideo.style.transform = "none";
+                } else {
+                    previewVideo.style.transform = "scaleX(-1)";
+                }
                 
                 scanStatus.innerText = "Align student face. Detecting...";
                 
@@ -345,11 +392,26 @@
         if (isProcessing) return;
         
         const context = faceCanvas.getContext('2d');
+        // Mirror snap drawing only if front camera
+        if (currentFacingMode === "user") {
+            context.translate(faceCanvas.width, 0);
+            context.scale(-1, 1);
+        }
         context.drawImage(previewVideo, 0, 0, faceCanvas.width, faceCanvas.height);
+        context.setTransform(1, 0, 0, 1, 0, 0); // Reset
+        
         const base64Image = faceCanvas.toDataURL('image/jpeg');
         
         isProcessing = true;
-        scanStatus.innerText = "Analyzing facial matching...";
+        scanStatus.innerText = "Analyzing student face...";
+        
+        const payload = {
+            image: base64Image,
+            action: 'identify'
+        };
+        if (pendingToken) {
+            payload.qr_token = pendingToken;
+        }
         
         fetch("{% url 'verify_face_api' %}", {
             method: 'POST',
@@ -357,10 +419,7 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': '{{ csrf_token }}'
             },
-            body: JSON.stringify({
-                image: base64Image,
-                action: 'identify'
-            })
+            body: JSON.stringify(payload)
         })
         .then(res => res.json())
         .then(data => {
@@ -370,37 +429,6 @@
                 playBeep();
                 stopFaceScan();
                 
-                // Fetch full details by querying qr or profile metadata. Since the API returns success with student_name,
-                // we can fetch billing info by student_name or query. Let's do a request using student_name to get their QR token,
-                // or wait, let's load details directly using their profile id if we returned it from the face API!
-                // Let's modify the face api response or query directly.
-                // Ah, the face API returns student_name. Let's modify face verification to return the student's qr_code_token as well!
-                // Wait, verify_face_api returns success: true, student_name, batch, time. We can fetch their QR parameters using their qr_code_token.
-                // Oh! Let's check: does verify_face_api return a token? It does not by default, but wait, we can fetch student details from get_student_by_qr
-                // if we modify the views.py face API to return the student profile's id!
-                // Wait! Let's look at verify_face_api in views.py. It does not return profile ID.
-                // But wait, we can fetch student details by querying /api/get-student-qr/ with a token.
-                // To keep it simple, since we already have the profile info in matched_profile, we can modify verify_face_api to return:
-                // 'student_id': matched_profile.id, 'monthly_fee': str(matched_profile.monthly_fee), 'next_due_date': matched_profile.next_due_date.strftime('%Y-%m-%d'), 'batch': matched_profile.batch.name
-                // That is extremely easy! But wait, can we just do a quick fetch of their details using their name or can we get details from a direct AJAX call?
-                // Let's fetch details by making a quick fetch to an endpoint.
-                // Wait, we can look up details using the name or by adding `profile_id` to verify_face_api.
-                // Let's see: verify_face_api in views.py can return `success: True, student_id: matched_profile.id`!
-                // Yes, wait! In views.py verify_face_api, does it return the profile id?
-                // Yes, wait! Let's check verify_face_api returns:
-                // 'student_name': matched_profile.user.get_full_name(), 'batch': matched_profile.batch.name if matched_profile.batch else 'None'
-                // Wait! We can retrieve the details by modifying verify_face_api or simply querying their username!
-                // Actually, let's just make verify_face_api return the student's `qr_code_token`!
-                // Then the fee scanner can simply query `get_student_by_qr(token)` using that token! That is beautiful, uses the exact same billing flow, and requires no code changes to verification structure!
-                // Wait, does verify_face_api return the token? No, but wait, since the face check-in also marks them present, it actually checks them in!
-                // For fee collection, the teacher scans their face. The face API identifies the student and marks attendance. But wait! The teacher just wants to identify the student to collect fees, they don't necessarily want to mark attendance!
-                // Ah! If scanned in the Fee Collection module, the system should identify the student and open the fee modal.
-                // Yes! So if we verify their face in the Fee module, it shouldn't mark attendance. It should just identify them!
-                // Let's check how we can do that.
-                // In the API `verify_face_api`, we can pass a parameter: `action: 'identify'`.
-                // If `action == 'identify'`, the API will NOT record attendance, it will only identify the student and return their details: ID, name, batch, monthly fee, recommended next due date!
-                // This is absolutely brilliant and handles the requirements perfectly!
-                // Let's see if we already modified views.py. Yes, we did, but we can easily add a quick fallback or check if `action == 'identify'` in the post body, and skip creating the `AttendanceRecord`!
                 // Let's look:
                 // If we pass `action: 'identify'`, it skips the `AttendanceRecord` creation, skips the unique attendance check, and returns student info: ID, name, batch, monthly_fee, next_due_date, and recommended next due date.
                 // Let's write a small update to `coaching/views.py` `verify_face_api` to check for `action == 'identify'`!

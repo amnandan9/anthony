@@ -44,6 +44,27 @@
                 setTimeout(() => alert.remove(), 500);
             });
         }, 4000);
+
+        // Success beep sound
+        try {
+            const hasSuccess = document.querySelector('.alert-message.alert-success');
+            if (hasSuccess) {
+                const context = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = context.createOscillator();
+                const gainNode = context.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(context.destination);
+                oscillator.type = "sine";
+                oscillator.frequency.value = 900;
+                gainNode.gain.setValueAtTime(0, context.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.05);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.15);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.15);
+            }
+        } catch (e) {
+            console.error("Audio beep failed:", e);
+        }
     </script>
     {% endif %}
 
@@ -74,6 +95,21 @@
                 <li>
                     <a href="{% url 'super_admin_dashboard' %}" class="sidebar-link {% block active_dashboard %}{% endblock %}">
                         <i class="fa-solid fa-chart-line"></i> Admin Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'teacher_dashboard' %}" class="sidebar-link {% block active_teacher_dashboard %}{% endblock %}">
+                        <i class="fa-solid fa-chart-pie"></i> Student Directory
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_att_scan %}{% endblock %}">
+                        <i class="fa-solid fa-qrcode"></i> Attendance Scanner
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'scanner_fees' %}" class="sidebar-link {% block active_fee_scan %}{% endblock %}">
+                        <i class="fa-solid fa-receipt"></i> Fee Collection Scanner
                     </a>
                 </li>
             {% elif user.role == 'teacher' %}
