@@ -6,9 +6,9 @@
 {% block auth_content %}
 <div class="auth-container">
     <div class="auth-card" style="text-align: center;">
-        <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 80px; width: 80px; object-fit: contain; border-radius: 16px; background-color: white; padding: 6px; margin: 0 auto 16px; display: block; border: 2px solid var(--border-color);">
-        <h1 class="auth-title" style="font-size: 1.6rem; margin-bottom: 8px;">St. Anthony Coaching Center</h1>
-        <p class="auth-subtitle">Sign in to manage your coaching portal</p>
+        <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 150px; width: 150px; object-fit: contain; border-radius: 20px; background-color: white; padding: 10px; margin: 0 auto 24px; display: block; border: 2px solid var(--border-color); box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
+        <h1 class="auth-title" style="font-size: 1.8rem; margin-bottom: 8px;">St. Anthony Coaching Center</h1>
+        <p class="auth-subtitle" style="margin-bottom: 24px;">Sign in to manage your coaching portal</p>
         
         <form method="post" action="{% url 'login' %}">
             {% csrf_token %}

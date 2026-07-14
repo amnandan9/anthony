@@ -201,7 +201,7 @@
             if (devices && devices.length > 0) {
                 html5QrCode = new Html5Qrcode("qrReader");
                 html5QrCode.start(
-                    { facingMode: "environment" }, // Prefer back camera for teacher scanning student card
+                    { facingMode: "user" }, // Front/user camera is universally supported on laptops/TVs/mobiles
                     { fps: 10, qrbox: { width: 250, height: 250 } },
                     onQrSuccess,
                     onQrError

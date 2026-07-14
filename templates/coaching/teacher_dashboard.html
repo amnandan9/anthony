@@ -108,10 +108,10 @@
                         <td>{{ student.batch.name|default:"Unassigned" }}</td>
                         <td>{{ student.next_due_date|date:"M d, Y" }}</td>
                         <td>
-                            {% if student.next_due_date <= today %}
-                                <span class="badge badge-danger">Not Paid</span>
-                            {% else %}
+                            {% if student.is_paid_this_month %}
                                 <span class="badge badge-success">Paid</span>
+                            {% else %}
+                                <span class="badge badge-danger">Not Paid</span>
                             {% endif %}
                         </td>
                         <td>
