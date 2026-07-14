@@ -1,0 +1,99 @@
+# Implementation Plan — Phase 9
+
+## Summary
+Multiple improvements across face recognition, mobile responsiveness, QR printing, and deployment.
+
+---
+
+## 1. Face Scan — QR Token Linked Verification
+
+**Current problem:** Face scan shoots frames blindly against ALL students in the DB — slow and inaccurate.
+
+**Fix:** Two-step scan flow:
+1. **Step 1 — QR scan** (or manual token entry): Identify the student → store their `username` in a JS variable `pendingToken`.
+2. **Step 2 — Face verify** (immediately auto-triggered): Camera snaps a frame and sends `{ qr_token: pendingToken, image: base64 }` to the backend, which fetches *only that student's* registered `face_data` and compares.
+
+**Backend change:** Update `verify_face_api` in `views.py` to accept an optional `qr_token` parameter. If provided, skip the full-DB scan and directly compare against that student.
+
+**Files:** `coaching/views.py`, `scanner_attendance.html`, `scanner_fees.html`
+
+---
+
+## 2. Mobile Layout Fixes
+
+**Issues identified:**
+- Topbar welcome text wraps and breaks on small screens
+- `profile-flex-layout` and table rows overflow on 320–480px screens
+- Scanner cards are too wide on phones
+- Fee history grid overflows
+
+**Fixes in `style.css`:**
+- Add `overflow-x: hidden` on `body` and `main-wrapper`
+- Add a `@media (max-width: 360px)` block for very small phones
+- Fix topbar flex-wrap for welcome text
+- Make fee/table rows horizontally scrollable with `overflow-x: auto` wrapper
+
+---
+
+## 3. Camera Flip Button (Mobile)
+
+Add a **Flip Camera** button that toggles between `facingMode: "user"` (front) and `facingMode: "environment"` (rear camera) on both the QR scanner and face scanner.
+
+**Files:** `scanner_attendance.html`, `scanner_fees.html`
+
+---
+
+## 4. QR Printout Page — 9 per A4
+
+A new **print view** accessible from the Teacher Dashboard:
+- URL: `/print/qr/batch/<batch_id>/` or `/print/qr/student/<username>/`
+- Renders 9 student QR codes per A4 page (3×3 grid)
+- Each cell: QR code (128×128), student name, class, unique ID
+- Print-optimised CSS (`@media print`) — no sidebar, no topbar, black text on white
+- Logo embedded in QR center
+
+**New files:** `templates/coaching/print_qr.html`  
+**New URL + view:** `coaching/urls.py`, `coaching/views.py`
+
+---
+
+## 5. Suggested New Features (implementing now)
+
+| Feature | Detail |
+|---------|--------|
+| **Attendance % badge on scanner popup** | Show today's running attendance % for the batch |
+| **"Late" vs "Present" marking** | If check-in is after configurable cutoff time (e.g. 9:30 AM), mark as "Late" instead of "Present" |
+| **Batch QR print by teacher** | Teacher can select a batch and print all student QR cards in one click |
+
+---
+
+## 6. Deploy to PythonAnywhere
+
+After all changes: run `collectstatic`, commit, push to GitHub, then `git pull` + reload on PythonAnywhere.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Two-step face scan flow:** After QR scan, should the face verification be **mandatory** (student must also show face to confirm) or **optional** (QR scan alone marks attendance, face just adds a secondary visual verification)? 
+> 
+> Currently QR scan marks attendance immediately. The "linked" face scan would require the student to also show their face after scanning QR.
+
+> [!IMPORTANT]
+> **Late mark cutoff time:** Should "Late" attendance be time-based? If yes, what time should be considered the cutoff? Or keep it simple — just always mark "Present"?
+
+> [!NOTE]
+> **Print QR page access:** Should all teachers be able to print QR sheets, or only super admin?
+..........................
+Comments
+Artifact Comments
+Implementation Plan
+5. Suggested New Features (implementing now)
+also add a beep like when attendance is successfully entered or when fees is paid, make sure all the alingment fits the screen and there is no need to scroool right or left in phone and 
+
+Print QR page access: Should all teachers be able to print QR sheets, or only super admin?
+as a super user i was thinking of downloading the qr later noticed if the qr striched it does not scan and it scanner in same size then it marks so i was wondering what is the size i need to take the print out
+
+Late mark cutoff time: Should "Late" attendance be time-based? If yes, what time should be considere...
+for now there is nothing like that but best if there is time stamp
