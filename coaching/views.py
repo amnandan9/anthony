@@ -446,28 +446,8 @@ def add_class_schedule(request):
 @login_required
 @student_required
 def student_dashboard(request):
-    profile = get_object_or_404(StudentProfile, user=request.user)
-    attendance = AttendanceRecord.objects.filter(student=profile)
-    
-    # Calculate Attendance Rate
-    classes_conducted = ClassSchedule.objects.filter(
-        batch=profile.batch,
-        date__gte=profile.joining_date,
-        date__lte=timezone.localdate(),
-        is_holiday=False
-    ).count()
-    
-    classes_attended = attendance.filter(status='present').count()
-    attendance_rate = int((classes_attended / classes_conducted * 100)) if classes_conducted > 0 else 100
-    
-    context = {
-        'profile': profile,
-        'attendance': attendance,
-        'classes_conducted': classes_conducted,
-        'classes_attended': classes_attended,
-        'attendance_rate': attendance_rate,
-    }
-    return render(request, 'coaching/student_dashboard.html', context)
+    from django.http import Http404
+    raise Http404("Student portal has been disabled.")
 
 # --- Smart Scanners Views (Webcam HTML5 QR & Face) ---
 

@@ -49,22 +49,13 @@ class CoachingSecurityTests(TestCase):
         self.teacher_user.set_password("pass123")
         self.teacher_user.save()
 
-    def test_student_dashboard_privacy(self):
+    def test_student_dashboard_disabled(self):
         """
-        Verify that student dashboard is accessible but hides sensitive fee information.
+        Verify that student dashboard returns 404 since it has been disabled.
         """
         self.client.login(username="student_alice", password="pass123")
         response = self.client.get(reverse('student_dashboard'))
-        self.assertEqual(response.status_code, 200)
-        
-        # Verify basic details are present
-        self.assertContains(response, "Alice Green")
-        self.assertContains(response, "Test Batch")
-        
-        # Verify fee details are completely hidden from response content
-        self.assertNotContains(response, "150.00")
-        self.assertNotContains(response, "Monthly Fee")
-        self.assertNotContains(response, "Billing")
+        self.assertEqual(response.status_code, 404)
 
     def test_student_blocked_from_teacher_views(self):
         """

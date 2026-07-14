@@ -98,16 +98,13 @@
                     </a>
                 </li>
             {% elif user.role == 'student' %}
-                <li>
-                    <a href="{% url 'student_dashboard' %}" class="sidebar-link {% block active_student_dashboard %}{% endblock %}">
-                        <i class="fa-solid fa-user-graduate"></i> My Portal
-                    </a>
-                </li>
-                <li>
-                    <a href="{% url 'scanner_attendance' %}" class="sidebar-link {% block active_student_att_scan %}{% endblock %}">
-                        <i class="fa-solid fa-qrcode"></i> Self Attendance Scan
-                    </a>
-                </li>
+                {% if user.username == 'scanner' %}
+                    <li>
+                        <a href="{% url 'scanner_attendance' %}" class="sidebar-link active">
+                            <i class="fa-solid fa-qrcode"></i> Attendance Terminal
+                        </a>
+                    </li>
+                {% endif %}
             {% endif %}
             <li class="mobile-only">
                 <a href="{% url 'logout' %}" class="sidebar-link" style="color: var(--accent-rose)">
