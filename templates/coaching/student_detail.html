@@ -96,10 +96,57 @@
             <div class="card-header-flex">
                 <h3>Billing & Fee Transactions</h3>
                 <button onclick="openFeeModal()" class="btn-premium" style="padding: 8px 16px; font-size: 0.85rem;">
-                    <i class="fa-solid fa-dollar-sign" style="margin-right: 6px;"></i> Collect Fee
+                    <i class="fa-solid fa-indian-rupee-sign" style="margin-right: 6px;"></i> Collect Fee
                 </button>
             </div>
             
+            <h4 style="margin-top: 24px; margin-bottom: 12px; color: var(--accent-indigo);">12-Month Status History</h4>
+            <div class="table-wrapper" style="margin-bottom: 24px;">
+                <table class="table-premium">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Status</th>
+                            <th>Amount Paid</th>
+                            <th>Payment Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hist in payment_history %}
+                        <tr>
+                            <td><strong>{{ hist.month_name }}</strong></td>
+                            <td>
+                                {% if hist.is_paid %}
+                                    <span style="color: var(--accent-emerald); font-weight: bold;"><i class="fa-solid fa-circle-check"></i> Paid</span>
+                                {% else %}
+                                    <span style="color: var(--accent-rose); font-weight: bold;"><i class="fa-solid fa-circle-xmark"></i> Not Paid</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if hist.is_paid %}
+                                    ₹{{ hist.amount }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if hist.date %}
+                                    {{ hist.date|date:"M d, Y" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 16px;">No history records available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--text-primary); font-size: 0.95rem;">Transaction Logs</h4>
             <div class="table-wrapper">
                 <table class="table-premium">
                     <thead>

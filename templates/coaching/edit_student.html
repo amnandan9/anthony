@@ -85,13 +85,17 @@
                 
                 <input type="hidden" name="face_data" id="faceDataInput" value="{{ profile.face_data|default:'' }}">
                 
-                <div style="display: flex; gap: 12px;">
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
                     <button type="button" class="btn-premium btn-secondary" id="startRegCamBtn" onclick="startRegCamera()" style="font-size: 0.85rem; padding: 8px 16px;">
                         <i class="fa-solid fa-video"></i> Start Camera
                     </button>
                     <button type="button" class="btn-premium" id="snapRegFaceBtn" onclick="snapRegFace()" style="font-size: 0.85rem; padding: 8px 16px; display: none;">
                         <i class="fa-solid fa-camera-retro"></i> Capture Snapshot
                     </button>
+                    <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('regFileInput').click()" style="font-size: 0.85rem; padding: 8px 16px;">
+                        <i class="fa-solid fa-file-image"></i> Upload Photo
+                    </button>
+                    <input type="file" accept="image/*" id="regFileInput" style="display: none;" onchange="handleRegFileSelect(this)">
                 </div>
             </div>
         </div>
@@ -164,6 +168,25 @@
         if (regStream) {
             regStream.getTracks().forEach(track => track.stop());
             regStream = null;
+        }
+    }
+
+    function handleRegFileSelect(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const dataUrl = e.target.result;
+                faceInput.value = dataUrl;
+                regPreview.src = dataUrl;
+                
+                regPreview.style.display = 'block';
+                regVideo.style.display = 'none';
+                if (regIcon) regIcon.style.display = 'none';
+                startCamBtn.style.display = 'inline-flex';
+                startCamBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Retake Photo';
+                snapFaceBtn.style.display = 'none';
+            };
+            reader.readAsDataURL(input.files[0]);
         }
     }
 </script>

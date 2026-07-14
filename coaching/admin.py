@@ -47,3 +47,6 @@ class ClassScheduleAdmin(admin.ModelAdmin):
     list_display = ('batch', 'title', 'date', 'start_time', 'end_time', 'is_holiday')
     list_filter = ('date', 'is_holiday', 'batch')
     search_fields = ('title', 'batch__name')
+
+# Limit Django Admin Panel access strictly to Superusers only
+admin.site.has_permission = lambda request: request.user.is_active and request.user.is_superuser

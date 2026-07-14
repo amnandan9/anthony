@@ -63,6 +63,19 @@
         <div class="scanner-status" id="scanStatus" style="width: 100%; margin-top: 16px;">
             Initializing terminal...
         </div>
+        
+        <!-- Manual Check-in Fallback Form -->
+        <div id="manualCheckinContainer" style="display: none; margin-top: 24px; padding: 20px; border: 1px solid var(--border-color); border-radius: 16px; background-color: rgba(255, 255, 255, 0.01); width: 100%; text-align: left;">
+            <h4 style="margin-bottom: 12px; font-size: 0.95rem; color: var(--accent-indigo);">Manual Fee Search</h4>
+            <div style="display: flex; gap: 12px;">
+                <input type="text" id="manualTokenInput" class="form-control" placeholder="Enter student card token..." style="padding: 10px; font-size: 0.9rem; flex: 1;">
+                <button onclick="submitManualCheckin()" class="btn-premium" style="padding: 10px 16px; font-size: 0.9rem;">Search</button>
+            </div>
+        </div>
+        
+        <button onclick="toggleManualCheckin()" class="btn-premium btn-secondary" style="margin-top: 16px; width: 100%; padding: 10px;">
+            <i class="fa-solid fa-keyboard" style="margin-right: 6px;"></i> Type Card Token (No Camera)
+        </button>
     </div>
 </div>
 
@@ -380,11 +393,48 @@
         }
     }
 
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        if (event.target == feeModal) {
-            closeFeeModal();
+    function toggleManualCheckin() {
+        const container = document.getElementById('manualCheckinContainer');
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            stopQRScan();
+            stopFaceScan();
+            scanStatus.innerText = "Waiting for manual token entry...";
+        } else {
+            container.style.display = 'none';
+            if (currentMode === 'qr') {
+                initQRScan();
+            } else {
+                initFaceScan();
+            }
         }
+    }
+
+    function submitManualCheckin() {
+        const tokenInput = document.getElementById('manualTokenInput');
+        const token = tokenInput.value.trim();
+        if (!token) {
+            alert("Please enter a valid card token.");
+            return;
+        }
+        
+        scanStatus.innerText = "Searching student card token...";
+        
+        fetch(`/api/get-student-qr/${token}/`)
+        .then(res => res.json())
+        .then(data => {
+            playBeep();
+            if (data.success) {
+                loadFeeModal(data);
+                tokenInput.value = '';
+            } else {
+                scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Server communication error.</span>";
+        });
     }
 
     // Auto start scanner immediately on load

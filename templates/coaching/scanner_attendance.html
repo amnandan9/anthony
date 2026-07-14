@@ -76,6 +76,19 @@
                 <div>Time Checked In: <strong id="resultTime">00:00 AM</strong></div>
             </div>
         </div>
+        
+        <!-- Manual Check-in Fallback Form -->
+        <div id="manualCheckinContainer" style="display: none; margin-top: 24px; padding: 20px; border: 1px solid var(--border-color); border-radius: 16px; background-color: rgba(255, 255, 255, 0.01); width: 100%; text-align: left;">
+            <h4 style="margin-bottom: 12px; font-size: 0.95rem; color: var(--accent-indigo);">Manual Check-In Fallback</h4>
+            <div style="display: flex; gap: 12px;">
+                <input type="text" id="manualTokenInput" class="form-control" placeholder="Enter student card token..." style="padding: 10px; font-size: 0.9rem; flex: 1;">
+                <button onclick="submitManualCheckin()" class="btn-premium" style="padding: 10px 16px; font-size: 0.9rem;">Submit</button>
+            </div>
+        </div>
+        
+        <button onclick="toggleManualCheckin()" class="btn-premium btn-secondary" style="margin-top: 16px; width: 100%; padding: 10px;">
+            <i class="fa-solid fa-keyboard" style="margin-right: 6px;"></i> Type Card Token (No Camera)
+        </button>
     </div>
 </div>
 {% endblock %}
@@ -341,6 +354,69 @@
             document.getElementById('resultTime').innerText = "Logged Today";
         }
         resultCard.style.display = 'block';
+    }
+
+    function toggleManualCheckin() {
+        const container = document.getElementById('manualCheckinContainer');
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            stopQRScan();
+            stopFaceScan();
+            scanStatus.innerText = "Waiting for manual token entry...";
+        } else {
+            container.style.display = 'none';
+            if (currentMode === 'qr') {
+                initQRScan();
+            } else {
+                initFaceScan();
+            }
+        }
+    }
+
+    function submitManualCheckin() {
+        const tokenInput = document.getElementById('manualTokenInput');
+        const token = tokenInput.value.trim();
+        if (!token) {
+            alert("Please enter a valid card token.");
+            return;
+        }
+        
+        scanStatus.innerText = "Processing manual check-in...";
+        
+        fetch("{% url 'mark_attendance_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                qr_token: token,
+                marked_by: "{{ user.role }}" === "student" ? "self_qr" : "teacher"
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            playBeep();
+            showResult(data);
+            tokenInput.value = '';
+            
+            setTimeout(() => {
+                resultCard.style.display = 'none';
+                if (document.getElementById('manualCheckinContainer').style.display === 'none') {
+                    if (currentMode === 'qr') {
+                        scanStatus.innerText = "Scanning for QR Code cards...";
+                    } else {
+                        scanStatus.innerText = "Align your face. Detecting...";
+                    }
+                } else {
+                    scanStatus.innerText = "Waiting for manual token entry...";
+                }
+            }, 3000);
+        })
+        .catch(err => {
+            console.error(err);
+            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Server communication error.</span>";
+        });
     }
 
     // Auto start scanner immediately on load

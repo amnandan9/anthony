@@ -271,6 +271,10 @@ def edit_student(request, student_id):
         profile.monthly_fee = request.POST.get('monthly_fee')
         profile.next_due_date = request.POST.get('next_due_date')
         
+        face_data = request.POST.get('face_data')
+        if face_data:
+            profile.face_data = face_data
+            
         batch_id = request.POST.get('batch')
         profile.batch = Batch.objects.filter(id=batch_id).first() if batch_id else None
         profile.save()
@@ -288,7 +292,6 @@ def student_detail(request, student_id):
     attendance = AttendanceRecord.objects.filter(student=profile)
     
     # Statistics calculations
-    # 1. Total classes conducted for this batch since they joined
     classes_conducted = ClassSchedule.objects.filter(
         batch=profile.batch,
         date__gte=profile.joining_date,
@@ -296,15 +299,63 @@ def student_detail(request, student_id):
         is_holiday=False
     ).count()
     
-    # 2. Classes attended
     classes_attended = attendance.filter(status='present').count()
-    
-    # 3. Attendance Rate
     attendance_rate = int((classes_attended / classes_conducted * 100)) if classes_conducted > 0 else 100
     
+    # 12-Month Payment History calculation
+    payment_history = []
+    today = timezone.localdate()
+    current_year = today.year
+    current_month = today.month
+    
+    for i in range(12):
+        m = current_month - i
+        y = current_year
+        while m <= 0:
+            m += 12
+            y -= 1
+            
+        first_of_month = datetime.date(y, m, 1)
+        month_label = first_of_month.strftime('%b %Y') # e.g. Jul 2026
+        
+        enroll_month_first = profile.joining_date.replace(day=1)
+        if first_of_month < enroll_month_first:
+            continue  # Prior to enrollment month
+            
+        next_m = m + 1
+        next_y = y
+        if next_m > 12:
+            next_m = 1
+            next_y += 1
+        next_month_first = datetime.date(next_y, next_m, 1)
+        
+        pmt = FeePayment.objects.filter(
+            student=profile,
+            payment_date__gte=first_of_month,
+            payment_date__lt=next_month_first
+        ).first()
+        
+        if pmt:
+            payment_history.append({
+                'month_name': month_label,
+                'status': 'Paid',
+                'amount': pmt.amount_paid,
+                'date': pmt.payment_date,
+                'is_paid': True
+            })
+        else:
+            payment_history.append({
+                'month_name': month_label,
+                'status': 'Not Paid',
+                'amount': 0.00,
+                'date': None,
+                'is_paid': False
+            })
+            
     context = {
         'profile': profile,
         'payments': payments,
+        'payment_history': payment_history,
         'attendance': attendance,
         'classes_conducted': classes_conducted,
         'classes_attended': classes_attended,
@@ -332,7 +383,7 @@ def collect_fee(request, student_id):
         profile.next_due_date = next_due
         profile.save()
         
-        messages.success(request, f"Fee payment of ${amount} recorded for {profile.user.get_full_name()}. Next due: {next_due}.")
+        messages.success(request, f"Fee payment of ₹{amount} recorded for {profile.user.get_full_name()}. Next due: {next_due}.")
         return redirect('student_detail', student_id=student_id)
     return redirect('teacher_dashboard')
 

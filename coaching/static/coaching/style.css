@@ -364,7 +364,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     justify-content: center;
     padding: 12px 24px;
-    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+    background-color: var(--accent-indigo);
     color: #fff;
     border: none;
     border-radius: 12px;
@@ -374,33 +374,62 @@ h1, h2, h3, h4, h5, h6 {
     cursor: pointer;
     text-decoration: none;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .btn-premium:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+    background-color: #4f46e5;
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    box-shadow: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-    box-shadow: none;
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 .btn-danger {
-    background: linear-gradient(135deg, var(--accent-rose), #e11d48);
-    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+    background-color: var(--accent-rose);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-danger:hover {
-    box-shadow: 0 6px 20px rgba(244, 63, 94, 0.5);
+    background-color: #e11d48;
+}
+
+/* TV browser D-pad navigation active indicators */
+a:focus, button:focus, input:focus, select:focus, textarea:focus, [tabindex]:focus {
+    outline: 3px solid var(--accent-amber) !important;
+    outline-offset: 3px !important;
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    transform: scale(1.02);
+    transition: all 0.15s ease-in-out;
 }
 
 /* Alert Notification messages */
