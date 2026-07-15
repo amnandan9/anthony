@@ -172,7 +172,7 @@
     let html5QrCode = null;
     let faceStream = null;
     let faceInterval = null;
-    let currentMode = 'qr'; // 'qr' or 'face'
+    let currentMode = localStorage.getItem('attendanceMode') || 'qr'; // 'qr' or 'face'
     let isProcessing = false;
     let currentFacingMode = "user"; // "user" or "environment"
     let pendingToken = null; // linked verification student token
@@ -232,6 +232,7 @@
     function setMode(mode) {
         if (mode === currentMode) return;
         currentMode = mode;
+        localStorage.setItem('attendanceMode', mode);
         pendingToken = null; // Reset linked token
         
         // Update button visual styles
@@ -555,16 +556,10 @@
             modalTimeout = null;
         }
         attendanceSuccessModal.style.display = 'none';
-        
-        // Reset scanner state
         isProcessing = false;
-        if (document.getElementById('manualCheckinContainer').style.display === 'block') {
-            scanStatus.innerText = "Waiting for manual token entry...";
-        } else if (currentMode === 'qr') {
-            scanStatus.innerText = "Scanning for QR Code cards...";
-        } else {
-            scanStatus.innerText = "Align your face. Detecting...";
-        }
+        
+        // Auto refresh page on close to guarantee fresh camera stream and state
+        window.location.reload();
     }
 
     function toggleManualCheckin() {
@@ -621,9 +616,11 @@
         });
     }
 
-    // Auto start scanner immediately on load
+    // Auto start scanner immediately on load based on saved mode
     window.onload = function() {
-        initQRScan();
+        const savedMode = localStorage.getItem('attendanceMode') || 'qr';
+        currentMode = ''; // Force setMode to run
+        setMode(savedMode);
     }
 </script>
 {% endblock %}

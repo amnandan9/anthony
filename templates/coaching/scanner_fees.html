@@ -137,7 +137,7 @@
     let html5QrCode = null;
     let faceStream = null;
     let faceInterval = null;
-    let currentMode = 'qr';
+    let currentMode = localStorage.getItem('feeMode') || 'qr';
     let isProcessing = false;
     let currentFacingMode = "user"; // "user" or "environment"
     let pendingToken = null; // linked verification student token
@@ -197,6 +197,7 @@
     function setMode(mode) {
         if (mode === currentMode) return;
         currentMode = mode;
+        localStorage.setItem('feeMode', mode);
         pendingToken = null; // Reset linked token
         
         if (mode === 'qr') {
@@ -502,20 +503,8 @@
         isProcessing = false;
         pendingToken = null;
         
-        // Resume scanning when modal is closed
-        if (currentMode === 'qr') {
-            scanStatus.innerText = "Scanning student QR card...";
-            if (html5QrCode) {
-                html5QrCode.resume();
-            } else {
-                initQRScan();
-            }
-        } else {
-            // Stay in direct Face scan mode
-            scanStatus.innerText = "Align your face. Detecting...";
-            scanViewport.style.display = 'block';
-            initFaceScan();
-        }
+        // Auto refresh page on close to guarantee fresh camera stream and state
+        window.location.reload();
     }
 
     function toggleManualCheckin() {
@@ -562,9 +551,11 @@
         });
     }
 
-    // Auto start scanner immediately on load
+    // Auto start scanner immediately on load based on saved mode
     window.onload = function() {
-        initQRScan();
+        const savedMode = localStorage.getItem('feeMode') || 'qr';
+        currentMode = ''; // Force setMode to run
+        setMode(savedMode);
     }
 </script>
 {% endblock %}
