@@ -23,8 +23,8 @@
             
             <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; font-size: 0.9rem;">
                 <div style="display: flex; justify-content: space-between;">
-                    <span style="color: var(--text-secondary);">Age:</span>
-                    <strong>{{ profile.age }}</strong>
+                    <span style="color: var(--text-secondary);">Class/Std:</span>
+                    <strong>{{ profile.class_std|default:"-" }}</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--text-secondary);">Joining Date:</span>

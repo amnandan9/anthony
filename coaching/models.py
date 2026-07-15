@@ -35,7 +35,7 @@ class Batch(models.Model):
 
 class StudentProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    age = models.PositiveIntegerField()
+    class_std = models.CharField(max_length=50, blank=True, null=True, verbose_name="Class/Std")
     school_college = models.CharField(max_length=200, verbose_name="School/College")
     contact_number = models.CharField(max_length=15)
     parent_contact = models.CharField(max_length=15)

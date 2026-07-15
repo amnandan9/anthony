@@ -140,6 +140,14 @@
                 <strong style="color: var(--text-primary);" id="popupCheckinTime">--:--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.9rem;">Next Due Date:</span>
+                <strong style="color: var(--text-primary);" id="popupNextDue">--/--/----</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.9rem;">Streak (This Month):</span>
+                <strong style="color: var(--accent-indigo);" id="popupStreak">0</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
                 <span style="color: var(--text-secondary); font-size: 0.9rem;">Batch Attendance Today:</span>
                 <strong style="color: var(--accent-indigo);" id="popupBatchAttendance">0%</strong>
             </div>
@@ -238,11 +246,10 @@
             document.getElementById('modeFaceBtn').className = "btn-premium";
             document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
             
-            // For two-step face scan, we start by scanning QR code first!
-            stopFaceScan();
-            qrReaderDiv.style.display = 'block';
-            scanViewport.style.display = 'none';
-            initQRScan();
+            stopQRScan();
+            qrReaderDiv.style.display = 'none';
+            scanViewport.style.display = 'block';
+            initFaceScan();
         }
         resultCard.style.display = 'none';
     }
@@ -265,7 +272,7 @@
                 html5QrCode = new Html5Qrcode("qrReader");
                 html5QrCode.start(
                     { facingMode: currentFacingMode },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    { fps: 15, qrbox: (width, height) => { return { width: Math.min(width, height) * 0.8, height: Math.min(width, height) * 0.8 }; } },
                     onQrSuccess,
                     onQrError
                 )
@@ -517,6 +524,8 @@
         document.getElementById('popupStudentBatch').innerText = data.batch || "None";
         document.getElementById('popupStudentSchool').innerText = data.school || "None";
         document.getElementById('popupCheckinTime').innerText = data.time || "--:--";
+        document.getElementById('popupNextDue').innerText = data.next_due || "--/--/----";
+        document.getElementById('popupStreak').innerText = data.streak ?? "0";
         document.getElementById('popupBatchAttendance').innerText = (data.batch_attendance_percentage ?? 0) + '%';
         
         // Fee Status

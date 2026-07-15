@@ -2,6 +2,7 @@ import json
 import datetime
 import base64
 import csv
+import numpy as np
 from io import BytesIO
 from PIL import Image, ImageOps
 from django.shortcuts import render, redirect, get_object_or_404
@@ -238,7 +239,7 @@ def register_student(request):
         email = request.POST.get('email')
         password = request.POST.get('password')
         
-        age = request.POST.get('age')
+        class_std = request.POST.get('class_std')
         school = request.POST.get('school_college')
         contact = request.POST.get('contact_number')
         parent_contact = request.POST.get('parent_contact')
@@ -266,7 +267,7 @@ def register_student(request):
         
         profile = StudentProfile.objects.create(
             user=user,
-            age=age,
+            class_std=class_std,
             school_college=school,
             contact_number=contact,
             parent_contact=parent_contact,
@@ -295,7 +296,7 @@ def edit_student(request, student_id):
         user.email = request.POST.get('email')
         user.save()
         
-        profile.age = request.POST.get('age')
+        profile.class_std = request.POST.get('class_std')
         profile.school_college = request.POST.get('school_college')
         profile.contact_number = request.POST.get('contact_number')
         profile.parent_contact = request.POST.get('parent_contact')
@@ -497,6 +498,14 @@ def mark_attendance_api(request):
             ).exists()
             fee_status_str = "Paid" if has_paid else "Not Paid"
             
+            # Calculate streak (attendance count this month)
+            streak = AttendanceRecord.objects.filter(
+                student=profile,
+                date__gte=first_of_month,
+                date__lte=today,
+                status__in=['present', 'late']
+            ).count()
+            
             # Calculate check-in time and status (present vs late)
             from django.conf import settings
             cutoff_str = getattr(settings, 'ATTENDANCE_LATE_CUTOFF', '09:30')
@@ -536,7 +545,9 @@ def mark_attendance_api(request):
                     'face_data': profile.face_data or '',
                     'status': existing_record.status,
                     'time': existing_record.time_in.strftime('%I:%M %p'),
-                    'batch_attendance_percentage': batch_attendance_percentage
+                    'batch_attendance_percentage': batch_attendance_percentage,
+                    'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
+                    'streak': streak
                 })
                 
             # Create Attendance
@@ -546,6 +557,14 @@ def mark_attendance_api(request):
                 status=determined_status,
                 marked_by=marked_by_type
             )
+            
+            # Recalculate streak after marking
+            streak = AttendanceRecord.objects.filter(
+                student=profile,
+                date__gte=first_of_month,
+                date__lte=today,
+                status__in=['present', 'late']
+            ).count()
             
             # Calculate running batch attendance percentage
             batch = profile.batch
@@ -570,7 +589,9 @@ def mark_attendance_api(request):
                 'fee_status': fee_status_str,
                 'face_data': profile.face_data or '',
                 'status': record.status,
-                'batch_attendance_percentage': batch_attendance_percentage
+                'batch_attendance_percentage': batch_attendance_percentage,
+                'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
+                'streak': streak
             })
             
         except Exception as e:
@@ -581,7 +602,7 @@ def mark_attendance_api(request):
 def compare_faces_pure_python(registered_b64, scanned_b64):
     try:
         if not registered_b64 or not scanned_b64:
-            return False, "Missing image data"
+            return False, 999.0
         
         if ',' in registered_b64:
             registered_b64 = registered_b64.split(',')[1]
@@ -592,24 +613,52 @@ def compare_faces_pure_python(registered_b64, scanned_b64):
         img1 = Image.open(BytesIO(base64.b64decode(registered_b64))).convert('L')
         img2 = Image.open(BytesIO(base64.b64decode(scanned_b64))).convert('L')
         
+        # Crop the center 70% of both images to focus on the face and exclude backgrounds/borders
+        w1, h1 = img1.size
+        crop_w1, crop_h1 = int(w1 * 0.70), int(h1 * 0.70)
+        left1 = (w1 - crop_w1) // 2
+        top1 = (h1 - crop_h1) // 2
+        img1 = img1.crop((left1, top1, left1 + crop_w1, top1 + crop_h1))
+        
+        w2, h2 = img2.size
+        crop_w2, crop_h2 = int(w2 * 0.70), int(h2 * 0.70)
+        left2 = (w2 - crop_w2) // 2
+        top2 = (h2 - crop_h2) // 2
+        img2 = img2.crop((left2, top2, left2 + crop_w2, top2 + crop_h2))
+        
         # Normalize contrast and lighting differences
         img1 = ImageOps.autocontrast(img1)
         img2 = ImageOps.autocontrast(img2)
         
-        # Resize to 24x24 for comparison details
-        img1 = img1.resize((24, 24))
-        img2 = img2.resize((24, 24))
+        # Convert to numpy arrays of shape (24, 24)
+        arr1 = np.array(img1.resize((24, 24)), dtype=np.float32)
+        arr2 = np.array(img2.resize((24, 24)), dtype=np.float32)
         
-        pixels1 = list(img1.getdata())
-        pixels2 = list(img2.getdata())
+        h, w = arr1.shape
+        min_mae = 255.0
         
-        # Mean Absolute Error (MAE) calculation
-        mae = sum(abs(p1 - p2) for p1, p2 in zip(pixels1, pixels2)) / len(pixels1)
-        
-        # Lower MAE is better. 45.0 is highly accurate after autocontrast normalization.
-        return mae < 45.0, mae
+        # Search shifts in dy, dx range of [-3, -2, -1, 0, 1, 2, 3] to align off-centered scans
+        for dy in range(-3, 4):
+            for dx in range(-3, 4):
+                # Bounds for overlapping region
+                y1_start, y1_end = max(0, dy), min(h, h + dy)
+                x1_start, x1_end = max(0, dx), min(w, w + dx)
+                
+                y2_start, y2_end = max(0, -dy), min(h, h - dy)
+                x2_start, x2_end = max(0, -dx), min(w, w - dx)
+                
+                slice1 = arr1[y1_start:y1_end, x1_start:x1_end]
+                slice2 = arr2[y2_start:y2_end, x2_start:x2_end]
+                
+                if slice1.size > 0:
+                    mae = np.mean(np.abs(slice1 - slice2))
+                    if mae < min_mae:
+                        min_mae = mae
+                        
+        # 45.0 is the standard threshold. Shift alignment keeps valid matches well below 40.0.
+        return min_mae < 45.0, min_mae
     except Exception as e:
-        return False, str(e)
+        return False, 999.0
 
 @csrf_exempt
 @login_required
@@ -629,8 +678,8 @@ def verify_face_api(request):
             today = timezone.localdate()
             matched_profile = None
             
-            # Scenario 1: Target username or qr_token specified (linked verification)
-            if qr_token or username or (request.user.role == 'student'):
+            # Scenario 1: Target username or qr_token specified (linked verification), or student on personal device (not 'scanner')
+            if qr_token or username or (request.user.role == 'student' and request.user.username != 'scanner'):
                 profile = None
                 if qr_token:
                     profile = StudentProfile.objects.filter(
@@ -684,6 +733,14 @@ def verify_face_api(request):
                 
                 matched_profile = best_match
             
+            # If face matches successfully, update face_data to refine verification with recent scan
+            if matched_profile:
+                matched_profile.face_data = image_data
+                matched_profile.save()
+                if matched_profile.user:
+                    matched_profile.user.face_data = image_data
+                    matched_profile.user.save()
+            
             # If the scanner is identifying for fees, return details directly without marking attendance
             if data.get('action') == 'identify':
                 return JsonResponse({
@@ -704,6 +761,14 @@ def verify_face_api(request):
                 payment_date__lte=today
             ).exists()
             fee_status_str = "Paid" if has_paid else "Not Paid"
+
+            # Calculate streak (attendance count this month)
+            streak = AttendanceRecord.objects.filter(
+                student=matched_profile,
+                date__gte=first_of_month,
+                date__lte=today,
+                status__in=['present', 'late']
+            ).count()
 
             # Check if already marked for today
             existing_record = AttendanceRecord.objects.filter(student=matched_profile, date=today).first()
@@ -732,7 +797,9 @@ def verify_face_api(request):
                     'face_data': matched_profile.face_data or '',
                     'status': existing_record.status,
                     'time': existing_record.time_in.strftime('%I:%M %p'),
-                    'batch_attendance_percentage': batch_attendance_percentage
+                    'batch_attendance_percentage': batch_attendance_percentage,
+                    'next_due': matched_profile.next_due_date.strftime('%d-%m-%Y'),
+                    'streak': streak
                 })
                 
             # Calculate check-in time and status (present vs late)
@@ -754,6 +821,14 @@ def verify_face_api(request):
                 status=determined_status,
                 marked_by='self_face'
             )
+            
+            # Recalculate streak after marking
+            streak = AttendanceRecord.objects.filter(
+                student=matched_profile,
+                date__gte=first_of_month,
+                date__lte=today,
+                status__in=['present', 'late']
+            ).count()
             
             # Calculate running batch attendance percentage
             batch = matched_profile.batch
@@ -778,12 +853,10 @@ def verify_face_api(request):
                 'fee_status': fee_status_str,
                 'face_data': matched_profile.face_data or '',
                 'status': record.status,
-                'batch_attendance_percentage': batch_attendance_percentage
+                'batch_attendance_percentage': batch_attendance_percentage,
+                'next_due': matched_profile.next_due_date.strftime('%d-%m-%Y'),
+                'streak': streak
             })
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)})
-            
-    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
             
@@ -908,4 +981,49 @@ def export_attendance_csv(request):
         ])
         
     return response
+
+
+@csrf_exempt
+def public_student_info(request):
+    """
+    Public API endpoint to view student details (Next Due and Streak) via QR code token,
+    WITHOUT requiring authentication. Fee amount is excluded.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            qr_token = data.get('qr_token')
+            if not qr_token:
+                return JsonResponse({'success': False, 'message': 'No QR code token provided.'})
+            
+            profile = StudentProfile.objects.filter(
+                Q(qr_code_token=qr_token) | Q(user__username=qr_token), 
+                user__is_active=True
+            ).first()
+            
+            if not profile:
+                return JsonResponse({'success': False, 'message': 'Student profile not found.'})
+            
+            today = timezone.localdate()
+            first_of_month = today.replace(day=1)
+            streak = AttendanceRecord.objects.filter(
+                student=profile,
+                date__gte=first_of_month,
+                date__lte=today,
+                status__in=['present', 'late']
+            ).count()
+            
+            return JsonResponse({
+                'success': True,
+                'student_name': profile.user.get_full_name(),
+                'batch': profile.batch.name if profile.batch else 'None',
+                'school': profile.school_college,
+                'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
+                'streak': streak,
+                'face_data': profile.face_data or ''
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+            
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
 

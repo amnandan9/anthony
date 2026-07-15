@@ -27,6 +27,195 @@
                 <i class="fa-solid fa-right-to-bracket" style="margin-right: 8px;"></i> Access System
             </button>
         </form>
+
+        <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <button type="button" onclick="openPublicScanner()" class="btn-premium btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa-solid fa-qrcode"></i> Student Info Check (Scan QR)
+            </button>
+        </div>
     </div>
 </div>
+
+<!-- Public Info Scanner Modal -->
+<div class="modal-overlay" id="publicScannerModal" style="display: none; z-index: 2000; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85);">
+    <div class="modal-premium" style="max-width: 440px; width: 90%; text-align: center; border: 2px solid var(--accent-indigo); padding: 24px; position: relative;">
+        <button class="modal-close" onclick="closePublicScanner()" style="background: none; border: none; color: #fff; font-size: 1.5rem; position: absolute; right: 15px; top: 10px; cursor: pointer;">&times;</button>
+        
+        <h3 style="color: var(--accent-indigo); margin-bottom: 12px;">Student Info Check</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">Scan your QR card code to view attendance & next due date</p>
+        
+        <!-- QR Viewport -->
+        <div id="publicQrReader" style="width: 100%; max-width: 300px; aspect-ratio: 1; margin: 0 auto 16px; border-radius: 12px; overflow: hidden; background: #000; box-shadow: var(--shadow-premium);"></div>
+        
+        <div id="publicScannerStatus" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">
+            Initializing camera...
+        </div>
+    </div>
+</div>
+
+<!-- Public Info Detail Modal -->
+<div class="modal-overlay" id="publicDetailModal" style="display: none; z-index: 2001; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95);">
+    <div class="modal-premium" style="max-width: 400px; width: 90%; text-align: center; border: 2px solid var(--accent-indigo); padding: 24px; position: relative;">
+        <button class="modal-close" onclick="closePublicDetail()" style="background: none; border: none; color: #fff; font-size: 1.5rem; position: absolute; right: 15px; top: 10px; cursor: pointer;">&times;</button>
+        
+        <h3 style="color: var(--accent-emerald); font-size: 1.35rem; margin-bottom: 16px;">
+            <i class="fa-solid fa-circle-info"></i> Student Account File
+        </h3>
+        
+        <!-- Photo Container -->
+        <div style="width: 110px; height: 135px; border-radius: 12px; overflow: hidden; border: 2px solid var(--accent-indigo); margin: 0 auto 20px; background-color: var(--bg-secondary); display: flex; align-items: center; justify-content: center;">
+            <img id="pubStudentPhoto" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+            <i class="fa-solid fa-user" id="pubPhotoPlaceholder" style="font-size: 2.5rem; color: var(--text-secondary);"></i>
+        </div>
+        
+        <div style="font-size: 1rem; line-height: 1.5; margin-bottom: 20px; text-align: left; background-color: rgba(255, 255, 255, 0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Name:</span>
+                <strong style="color: var(--text-primary);" id="pubStudentName">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Class:</span>
+                <strong style="color: var(--text-primary);" id="pubStudentBatch">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">School:</span>
+                <strong style="color: var(--text-primary);" id="pubStudentSchool">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Next Due Date:</span>
+                <strong style="color: var(--text-primary);" id="pubNextDue">--/--/----</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 4px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Streak (This Month):</span>
+                <strong style="color: var(--accent-indigo);" id="pubStreak">0 classes</strong>
+            </div>
+        </div>
+        
+        <button class="btn-premium" onclick="closePublicDetail()" style="width: 100%;">
+            Close
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'coaching/html5-qrcode.min.js' %}"></script>
+<script>
+    let publicQrCode = null;
+    let isPubProcessing = false;
+    
+    function playPublicBeep() {
+        try {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+            oscillator.type = "sine";
+            oscillator.frequency.value = 900;
+            gainNode.gain.setValueAtTime(0, context.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.15);
+            oscillator.start(context.currentTime);
+            oscillator.stop(context.currentTime + 0.15);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    
+    function openPublicScanner() {
+        document.getElementById("publicScannerModal").style.display = "flex";
+        isPubProcessing = false;
+        
+        if (typeof Html5Qrcode === 'undefined') {
+            document.getElementById("publicScannerStatus").innerHTML = "<span style='color: var(--accent-rose);'>Scanner library not loaded.</span>";
+            return;
+        }
+        
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+                publicQrCode = new Html5Qrcode("publicQrReader");
+                publicQrCode.start(
+                    { facingMode: "user" },
+                    { fps: 15, qrbox: (width, height) => { return { width: Math.min(width, height) * 0.8, height: Math.min(width, height) * 0.8 }; } },
+                    onPublicQrSuccess,
+                    onPublicQrError
+                )
+                .then(() => {
+                    document.getElementById("publicScannerStatus").innerText = "Align your student QR card to check info.";
+                })
+                .catch(err => {
+                    document.getElementById("publicScannerStatus").innerHTML = "<span style='color: var(--accent-rose);'>Camera permission blocked or unavailable.</span>";
+                });
+            } else {
+                document.getElementById("publicScannerStatus").innerHTML = "<span style='color: var(--accent-rose);'>No camera hardware detected.</span>";
+            }
+        }).catch(err => {
+            document.getElementById("publicScannerStatus").innerHTML = "<span style='color: var(--accent-rose);'>Camera access error.</span>";
+        });
+    }
+    
+    function closePublicScanner() {
+        if (publicQrCode) {
+            publicQrCode.stop().then(() => {
+                publicQrCode = null;
+            }).catch(e => console.error(e));
+        }
+        document.getElementById("publicScannerModal").style.display = "none";
+    }
+    
+    function onPublicQrSuccess(decodedText, decodedResult) {
+        if (isPubProcessing) return;
+        isPubProcessing = true;
+        
+        playPublicBeep();
+        closePublicScanner();
+        
+        fetch("{% url 'public_student_info' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ qr_token: decodedText })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById("pubStudentName").innerText = data.student_name;
+                document.getElementById("pubStudentBatch").innerText = data.batch;
+                document.getElementById("pubStudentSchool").innerText = data.school;
+                document.getElementById("pubNextDue").innerText = data.next_due;
+                document.getElementById("pubStreak").innerText = data.streak + " classes";
+                
+                const photoImg = document.getElementById("pubStudentPhoto");
+                const placeholder = document.getElementById("pubPhotoPlaceholder");
+                if (data.face_data) {
+                    photoImg.src = data.face_data;
+                    photoImg.style.display = "block";
+                    placeholder.style.display = "none";
+                } else {
+                    photoImg.style.display = "none";
+                    placeholder.style.display = "block";
+                }
+                
+                document.getElementById("publicDetailModal").style.display = "flex";
+            } else {
+                alert("Error: " + data.message);
+                isPubProcessing = false;
+            }
+        })
+        .catch(err => {
+            alert("Network connection error.");
+            isPubProcessing = false;
+        });
+    }
+    
+    function onPublicQrError(err) {}
+    
+    function closePublicDetail() {
+        document.getElementById("publicDetailModal").style.display = "none";
+        isPubProcessing = false;
+    }
+</script>
 {% endblock %}

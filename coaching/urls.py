@@ -43,4 +43,5 @@ urlpatterns = [
     path('api/verify-face/', views.verify_face_api, name='verify_face_api'),
     path('api/get-student-qr/<str:qr_token>/', views.get_student_by_qr, name='get_student_by_qr'),
     path('api/update-profile-photo/', views.update_profile_photo_api, name='update_profile_photo_api'),
+    path('api/public-student-info/', views.public_student_info, name='public_student_info'),
 ]

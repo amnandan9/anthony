@@ -69,16 +69,16 @@ class Command(BaseCommand):
 
         # 4. Create Students
         students_data = [
-            ('student1', 'student123', 'Alice', 'Green', 'alice@gmail.com', 16, 'High School West', '9876543210', '9876543211', batches[0], 150.00),
-            ('student2', 'student123', 'Bob', 'Brown', 'bob@gmail.com', 17, 'High School West', '8765432109', '8765432108', batches[0], 150.00),
-            ('student3', 'student123', 'Charlie', 'Davis', 'charlie@gmail.com', 19, 'State College', '7654321098', '7654321097', batches[1], 200.00),
-            ('student4', 'student123', 'David', 'Evans', 'david@gmail.com', 20, 'State College', '6543210987', '6543210986', batches[2], 250.00)
+            ('student1', 'student123', 'Alice', 'Green', 'alice@gmail.com', '10th Std', 'High School West', '9876543210', '9876543211', batches[0], 150.00),
+            ('student2', 'student123', 'Bob', 'Brown', 'bob@gmail.com', '11th Std', 'High School West', '8765432109', '8765432108', batches[0], 150.00),
+            ('student3', 'student123', 'Charlie', 'Davis', 'charlie@gmail.com', '12th Std', 'State College', '7654321098', '7654321097', batches[1], 200.00),
+            ('student4', 'student123', 'David', 'Evans', 'david@gmail.com', 'College Fresh', 'State College', '6543210987', '6543210986', batches[2], 250.00)
         ]
         
         today = timezone.localdate()
         next_month = today + datetime.timedelta(days=30)
 
-        for username, password, first, last, email, age, school, contact, parent, batch, fee in students_data:
+        for username, password, first, last, email, class_std, school, contact, parent, batch, fee in students_data:
             user, created = User.objects.get_or_create(
                 username=username,
                 defaults={
@@ -95,7 +95,7 @@ class Command(BaseCommand):
                 # Create Profile
                 profile = StudentProfile.objects.create(
                     user=user,
-                    age=age,
+                    class_std=class_std,
                     school_college=school,
                     contact_number=contact,
                     parent_contact=parent,

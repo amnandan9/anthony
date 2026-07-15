@@ -22,7 +22,7 @@ def super_admin_required(view_func):
     return role_required('super_admin')(view_func)
 
 def teacher_required(view_func):
-    return role_required('teacher')(view_func)
+    return role_required('teacher', 'super_admin')(view_func)
 
 def student_required(view_func):
     return role_required('student')(view_func)

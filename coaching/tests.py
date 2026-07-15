@@ -27,7 +27,7 @@ class CoachingSecurityTests(TestCase):
         
         self.student_profile = StudentProfile.objects.create(
             user=self.student_user,
-            age=16,
+            class_std="10th Std",
             school_college="Test High School",
             contact_number="1234567890",
             parent_contact="0987654321",
@@ -106,7 +106,7 @@ class AttendanceLogicTests(TestCase):
         
         self.profile = StudentProfile.objects.create(
             user=self.student_user,
-            age=15,
+            class_std="9th Std",
             school_college="College B",
             contact_number="1111",
             parent_contact="2222",
