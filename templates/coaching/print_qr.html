@@ -239,31 +239,37 @@
                     correctLevel : QRCode.CorrectLevel.H
                 });
                 
-                // Overlay logo after a small delay
+                // Overlay logo after a small delay (no crossOrigin to avoid CORS errors)
                 setTimeout(() => {
                     const canvas = container.querySelector("canvas");
                     const img = container.querySelector("img");
-                    if (canvas) {
+                    if (canvas && img) {
                         const ctx = canvas.getContext("2d");
                         const logo = new Image();
-                        logo.crossOrigin = "anonymous";
+                        // No crossOrigin attribute — avoids CORS taint for same-origin static files
                         logo.src = logoSrc;
                         logo.onload = function() {
-                            // 28% of canvas width
-                            const logoSize = canvas.width * 0.28;
+                            // Draw white backing circle so logo is readable on QR
+                            const logoSize = canvas.width * 0.26;
                             const x = (canvas.width - logoSize) / 2;
                             const y = (canvas.height - logoSize) / 2;
-                            
-                            // Draw logo directly on canvas
+                            ctx.fillStyle = "#ffffff";
+                            ctx.beginPath();
+                            ctx.arc(canvas.width / 2, canvas.height / 2, logoSize / 2 + 4, 0, Math.PI * 2);
+                            ctx.fill();
                             ctx.drawImage(logo, x, y, logoSize, logoSize);
-                            
-                            // Sync visible image
-                            if (img) {
+                            // Sync visible image from canvas
+                            try {
                                 img.src = canvas.toDataURL("image/png");
+                            } catch(e) {
+                                // Canvas is tainted — show raw QR without logo overlay
                             }
                         };
+                        logo.onerror = function() {
+                            // Logo failed to load — leave QR code as-is (still scannable)
+                        };
                     }
-                }, 500);
+                }, 600);
             });
         });
     </script>

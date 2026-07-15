@@ -135,6 +135,14 @@
                 <span style="color: var(--text-secondary); font-size: 0.9rem;">School:</span>
                 <strong style="color: var(--text-primary);" id="popupStudentSchool">City High School</strong>
             </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.9rem;">Check-in Time:</span>
+                <strong style="color: var(--text-primary);" id="popupCheckinTime">--:--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.9rem;">Batch Attendance Today:</span>
+                <strong style="color: var(--accent-indigo);" id="popupBatchAttendance">0%</strong>
+            </div>
             <div style="display: flex; justify-content: space-between; padding-top: 4px;">
                 <span style="color: var(--text-secondary); font-size: 0.9rem;">Fee Status:</span>
                 <span id="popupFeeStatusBadge" class="badge">Paid</span>
@@ -192,7 +200,8 @@
     function toggleCameraFacing() {
         currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
         scanStatus.innerText = "Switching camera view...";
-        if (currentMode === 'qr') {
+        const isQrActive = (qrReaderDiv.style.display === 'block');
+        if (isQrActive) {
             if (html5QrCode) {
                 html5QrCode.stop().then(() => {
                     html5QrCode = null;
@@ -229,10 +238,11 @@
             document.getElementById('modeFaceBtn').className = "btn-premium";
             document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
             
-            stopQRScan();
-            qrReaderDiv.style.display = 'none';
-            scanViewport.style.display = 'block';
-            initFaceScan();
+            // For two-step face scan, we start by scanning QR code first!
+            stopFaceScan();
+            qrReaderDiv.style.display = 'block';
+            scanViewport.style.display = 'none';
+            initQRScan();
         }
         resultCard.style.display = 'none';
     }
@@ -260,7 +270,11 @@
                     onQrError
                 )
                 .then(() => {
-                    scanStatus.innerText = "Scanning for QR Code cards...";
+                    if (currentMode === 'face') {
+                        scanStatus.innerHTML = "<span style='color: var(--accent-indigo); font-weight: 600;'>Step 1: Scan your QR code</span> to identify yourself.";
+                    } else {
+                        scanStatus.innerText = "Scanning for QR Code cards...";
+                    }
                 })
                 .catch(err => {
                     scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam access blocked / denied.</span><br>
@@ -300,47 +314,64 @@
         if (isProcessing) return;
         isProcessing = true;
         
-        scanStatus.innerText = "Verifying QR Card...";
+        playBeep(); // Beep on successful scan!
         
-        // Fetch student details first
-        fetch(`/api/get-student-qr/${decodedText}/`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                pendingToken = decodedText;
-                
-                // Show intermediate feedback
-                scanStatus.innerHTML = `<span style='color: var(--accent-indigo); font-weight: 600;'>QR Matched: ${data.name}</span><br>Please look at the camera to verify your face...`;
-                playBeep(); // Beep on QR scan
-                
-                setTimeout(() => {
-                    // Switch to face camera to match
-                    stopQRScan();
-                    qrReaderDiv.style.display = 'none';
-                    scanViewport.style.display = 'block';
-                    currentMode = 'face';
+        if (currentMode === 'qr') {
+            scanStatus.innerText = "Marking attendance...";
+            // Mark attendance directly
+            fetch("{% url 'mark_attendance_api' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    qr_token: decodedText,
+                    marked_by: "{{ user.role }}" === "student" ? "self_qr" : "teacher"
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success || data.already_marked) {
+                    openAttendanceSuccessModal(data);
                     
-                    // Update visual state buttons
-                    document.getElementById('modeFaceBtn').className = "btn-premium";
-                    document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
-                    
-                    isProcessing = false;
-                    initFaceScan();
-                }, 1000);
-            } else {
-                scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+                    // Reset scanner for next student after 4 seconds
+                    setTimeout(() => {
+                        closeAttendanceSuccessModal();
+                        isProcessing = false;
+                        scanStatus.innerText = "Scanning for QR Code cards...";
+                    }, 4000);
+                } else {
+                    scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+                    setTimeout(() => {
+                        isProcessing = false;
+                        scanStatus.innerText = "Scanning for QR Code cards...";
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Attendance marking failed.</span>";
                 setTimeout(() => {
                     isProcessing = false;
+                    scanStatus.innerText = "Scanning for QR Code cards...";
                 }, 2000);
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>QR verification failed.</span>";
+            });
+        } else {
+            // Two-step face scan flow: Step 1 (QR scanned) is complete. Transition to Step 2 (Face scan)
+            scanStatus.innerHTML = `<span style='color: var(--accent-indigo); font-weight: 600;'>QR Matched!</span><br>Step 2: Please look at the camera to verify your face...`;
+            pendingToken = decodedText;
+            
             setTimeout(() => {
+                // Switch to face camera to match
+                stopQRScan();
+                qrReaderDiv.style.display = 'none';
+                scanViewport.style.display = 'block';
+                
                 isProcessing = false;
-            }, 2000);
-        });
+                initFaceScan();
+            }, 800);
+        }
     }
 
     function onQrError(err) {}
@@ -358,7 +389,7 @@
             document.getElementById('manualCheckinContainer').style.display = 'block';
             return;
         }
-        scanStatus.innerText = pendingToken ? "Starting face scanner for linked verification..." : "Requesting webcam for Face scan...";
+        scanStatus.innerText = "Step 2: Align your face in the viewport. Detecting...";
         
         navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } })
             .then(stream => {
@@ -373,7 +404,7 @@
                     previewVideo.style.transform = "scaleX(-1)";
                 }
                 
-                scanStatus.innerText = "Align your face. Detecting...";
+                scanStatus.innerText = "Step 2: Align your face in the viewport. Detecting...";
                 
                 // Start snapping loop every 1.5 seconds
                 faceInterval = setInterval(captureFaceFrame, 1500);
@@ -403,6 +434,7 @@
         previewVideo.srcObject = null;
     }
 
+    // Capture face frame and run verification
     function captureFaceFrame() {
         if (isProcessing) return;
         
@@ -462,12 +494,19 @@
 
     function openAttendanceSuccessModal(data) {
         const headerEl = document.getElementById('popupHeader');
-        if (data.success) {
-            headerEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Present Marked!';
-            headerEl.style.color = 'var(--accent-emerald)';
-        } else if (data.already_marked) {
-            headerEl.innerHTML = '<i class="fa-solid fa-circle-info"></i> Already Checked In';
-            headerEl.style.color = 'var(--accent-amber)';
+        if (data.success || data.already_marked) {
+            const isLate = data.status === 'late';
+            const statusLabel = isLate ? "Late Marked!" : "Present Marked!";
+            const statusColor = isLate ? "var(--accent-amber)" : "var(--accent-emerald)";
+            const statusIcon = isLate ? "fa-clock" : "fa-circle-check";
+            
+            if (data.already_marked) {
+                headerEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Already Marked (${isLate ? "Late" : "Present"})`;
+                headerEl.style.color = 'var(--accent-amber)';
+            } else {
+                headerEl.innerHTML = `<i class="fa-solid ${statusIcon}"></i> ${statusLabel}`;
+                headerEl.style.color = statusColor;
+            }
         } else {
             headerEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Scan Failed';
             headerEl.style.color = 'var(--accent-rose)';
@@ -477,6 +516,8 @@
         document.getElementById('popupStudentName').innerText = data.student_name || "Unknown Student";
         document.getElementById('popupStudentBatch').innerText = data.batch || "None";
         document.getElementById('popupStudentSchool').innerText = data.school || "None";
+        document.getElementById('popupCheckinTime').innerText = data.time || "--:--";
+        document.getElementById('popupBatchAttendance').innerText = (data.batch_attendance_percentage ?? 0) + '%';
         
         // Fee Status
         const badgeEl = document.getElementById('popupFeeStatusBadge');

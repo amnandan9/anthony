@@ -59,6 +59,7 @@ class AttendanceRecord(models.Model):
     STATUS_CHOICES = (
         ('present', 'Present'),
         ('absent', 'Absent'),
+        ('late', 'Late'),
     )
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='attendance_records')
     date = models.DateField(default=timezone.now)

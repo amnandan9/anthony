@@ -904,3 +904,28 @@ img, video, canvas {
     max-width: 100% !important;
     height: auto !important;
 }
+
+/* Scanner terminal mobile scaling */
+@media (max-width: 480px) {
+    #qrReader {
+        max-width: 100% !important;
+        aspect-ratio: 1 / 1 !important;
+    }
+    .webcam-viewport {
+        max-width: 100% !important;
+        height: 260px !important;
+    }
+    .scanner-container {
+        padding: 0 !important;
+    }
+    /* Mode toggle buttons on scanner pages */
+    #modeQrBtn, #modeFaceBtn {
+        padding: 8px 6px !important;
+        font-size: 0.8rem !important;
+    }
+    #flipCameraBtn {
+        font-size: 0.75rem !important;
+        padding: 6px 10px !important;
+    }
+}
+

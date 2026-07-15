@@ -31,7 +31,9 @@ urlpatterns = [
     
     # QR Print Sheet
     path('print/qr/', views.print_qr_sheet, name='print_qr_sheet'),
-    path('print/qr/<str:batch_id>/', views.print_qr_sheet, name='print_qr_sheet_batch'),
+    path('print/qr/<str:batch_id>/', views.print_qr_sheet, name='print_qr_sheet_batch_old'),
+    path('print/qr/batch/<str:batch_id>/', views.print_qr_sheet, name='print_qr_sheet_batch'),
+    path('print/qr/student/<str:username>/', views.print_qr_sheet, name='print_qr_sheet_student'),
     
     # Export
     path('export/attendance/', views.export_attendance_csv, name='export_attendance_csv'),

@@ -497,27 +497,68 @@ def mark_attendance_api(request):
             ).exists()
             fee_status_str = "Paid" if has_paid else "Not Paid"
             
+            # Calculate check-in time and status (present vs late)
+            from django.conf import settings
+            cutoff_str = getattr(settings, 'ATTENDANCE_LATE_CUTOFF', '09:30')
+            try:
+                hour, minute = map(int, cutoff_str.split(':'))
+                cutoff_time = datetime.time(hour, minute)
+            except Exception:
+                cutoff_time = datetime.time(9, 30)
+                
+            current_time = timezone.localtime().time()
+            determined_status = 'late' if current_time > cutoff_time else 'present'
+            
             # Check if already marked for today
-            exists = AttendanceRecord.objects.filter(student=profile, date=today).exists()
-            if exists:
+            existing_record = AttendanceRecord.objects.filter(student=profile, date=today).first()
+            if existing_record:
+                # Calculate running batch attendance percentage
+                batch = profile.batch
+                batch_attendance_percentage = 0
+                if batch:
+                    total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
+                    if total_students > 0:
+                        present_today = AttendanceRecord.objects.filter(
+                            student__batch=batch,
+                            date=today,
+                            status__in=['present', 'late']
+                        ).count()
+                        batch_attendance_percentage = int((present_today / total_students) * 100)
+                        
                 return JsonResponse({
                     'success': False, 
                     'already_marked': True,
-                    'message': f'{profile.user.get_full_name()} is already marked present for today.',
+                    'message': f'{profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today.',
                     'student_name': profile.user.get_full_name(),
                     'batch': profile.batch.name if profile.batch else 'None',
                     'school': profile.school_college,
                     'fee_status': fee_status_str,
-                    'face_data': profile.face_data or ''
+                    'face_data': profile.face_data or '',
+                    'status': existing_record.status,
+                    'time': existing_record.time_in.strftime('%I:%M %p'),
+                    'batch_attendance_percentage': batch_attendance_percentage
                 })
                 
             # Create Attendance
             record = AttendanceRecord.objects.create(
                 student=profile,
                 date=today,
-                status='present',
+                status=determined_status,
                 marked_by=marked_by_type
             )
+            
+            # Calculate running batch attendance percentage
+            batch = profile.batch
+            batch_attendance_percentage = 0
+            if batch:
+                total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
+                if total_students > 0:
+                    present_today = AttendanceRecord.objects.filter(
+                        student__batch=batch,
+                        date=today,
+                        status__in=['present', 'late']
+                    ).count()
+                    batch_attendance_percentage = int((present_today / total_students) * 100)
             
             return JsonResponse({
                 'success': True,
@@ -527,7 +568,9 @@ def mark_attendance_api(request):
                 'time': record.time_in.strftime('%I:%M %p'),
                 'school': profile.school_college,
                 'fee_status': fee_status_str,
-                'face_data': profile.face_data or ''
+                'face_data': profile.face_data or '',
+                'status': record.status,
+                'batch_attendance_percentage': batch_attendance_percentage
             })
             
         except Exception as e:
@@ -662,27 +705,68 @@ def verify_face_api(request):
             ).exists()
             fee_status_str = "Paid" if has_paid else "Not Paid"
 
-            # Verify check-in limit (once per day)
-            exists = AttendanceRecord.objects.filter(student=matched_profile, date=today).exists()
-            if exists:
+            # Check if already marked for today
+            existing_record = AttendanceRecord.objects.filter(student=matched_profile, date=today).first()
+            if existing_record:
+                # Calculate running batch attendance percentage
+                batch = matched_profile.batch
+                batch_attendance_percentage = 0
+                if batch:
+                    total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
+                    if total_students > 0:
+                        present_today = AttendanceRecord.objects.filter(
+                            student__batch=batch,
+                            date=today,
+                            status__in=['present', 'late']
+                        ).count()
+                        batch_attendance_percentage = int((present_today / total_students) * 100)
+                        
                 return JsonResponse({
                     'success': False,
                     'already_marked': True,
-                    'message': f'{matched_profile.user.get_full_name()} is already marked present for today.',
+                    'message': f'{matched_profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today.',
                     'student_name': matched_profile.user.get_full_name(),
                     'batch': matched_profile.batch.name if matched_profile.batch else 'None',
                     'school': matched_profile.school_college,
                     'fee_status': fee_status_str,
-                    'face_data': matched_profile.face_data or ''
+                    'face_data': matched_profile.face_data or '',
+                    'status': existing_record.status,
+                    'time': existing_record.time_in.strftime('%I:%M %p'),
+                    'batch_attendance_percentage': batch_attendance_percentage
                 })
                 
+            # Calculate check-in time and status (present vs late)
+            from django.conf import settings
+            cutoff_str = getattr(settings, 'ATTENDANCE_LATE_CUTOFF', '09:30')
+            try:
+                hour, minute = map(int, cutoff_str.split(':'))
+                cutoff_time = datetime.time(hour, minute)
+            except Exception:
+                cutoff_time = datetime.time(9, 30)
+                
+            current_time = timezone.localtime().time()
+            determined_status = 'late' if current_time > cutoff_time else 'present'
+
             # Record Attendance
             record = AttendanceRecord.objects.create(
                 student=matched_profile,
                 date=today,
-                status='present',
+                status=determined_status,
                 marked_by='self_face'
             )
+            
+            # Calculate running batch attendance percentage
+            batch = matched_profile.batch
+            batch_attendance_percentage = 0
+            if batch:
+                total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
+                if total_students > 0:
+                    present_today = AttendanceRecord.objects.filter(
+                        student__batch=batch,
+                        date=today,
+                        status__in=['present', 'late']
+                    ).count()
+                    batch_attendance_percentage = int((present_today / total_students) * 100)
             
             return JsonResponse({
                 'success': True,
@@ -692,8 +776,14 @@ def verify_face_api(request):
                 'time': record.time_in.strftime('%I:%M %p'),
                 'school': matched_profile.school_college,
                 'fee_status': fee_status_str,
-                'face_data': matched_profile.face_data or ''
+                'face_data': matched_profile.face_data or '',
+                'status': record.status,
+                'batch_attendance_percentage': batch_attendance_percentage
             })
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+            
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
             
@@ -756,7 +846,7 @@ def update_profile_photo_api(request):
 
 @login_required
 @role_required('teacher', 'super_admin')
-def print_qr_sheet(request, batch_id=None):
+def print_qr_sheet(request, batch_id=None, username=None):
     """
     Renders print-optimised list of students with QR codes (3x3 layout).
     """
@@ -764,6 +854,10 @@ def print_qr_sheet(request, batch_id=None):
         batch = get_object_or_404(Batch, id=batch_id)
         students = StudentProfile.objects.filter(batch=batch, user__is_active=True).order_by('user__first_name')
         title = f"QR Cards - {batch.name}"
+    elif username:
+        student = get_object_or_404(StudentProfile, user__username=username, user__is_active=True)
+        students = [student]
+        title = f"QR Card - {student.user.get_full_name()}"
     else:
         students = StudentProfile.objects.filter(user__is_active=True).order_by('batch__name', 'user__first_name')
         title = "All Student QR Cards"

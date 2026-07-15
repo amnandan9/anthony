@@ -169,11 +169,12 @@
         }
     }
 
-    // Camera Flip Function
+    // Camera Flip Function — works regardless of active scanner type
     function toggleCameraFacing() {
         currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
         scanStatus.innerText = "Switching camera view...";
-        if (currentMode === 'qr') {
+        const isQrActive = (qrReaderDiv.style.display === 'block');
+        if (isQrActive) {
             if (html5QrCode) {
                 html5QrCode.stop().then(() => {
                     html5QrCode = null;
@@ -209,10 +210,11 @@
             document.getElementById('modeFaceBtn').className = "btn-premium";
             document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
             
-            stopQRScan();
-            qrReaderDiv.style.display = 'none';
-            scanViewport.style.display = 'block';
-            initFaceScan();
+            // Two-step face mode: start with QR scan first to identify the student
+            stopFaceScan();
+            qrReaderDiv.style.display = 'block';
+            scanViewport.style.display = 'none';
+            initQRScan();
         }
         feeModal.style.display = 'none';
     }
@@ -246,7 +248,11 @@
                     onQrError
                 )
                 .then(() => {
-                    scanStatus.innerText = "Scanning student QR card...";
+                    if (currentMode === 'face') {
+                        scanStatus.innerHTML = "<span style='color: var(--accent-indigo); font-weight: 600;'>Step 1: Scan student QR card</span> to identify the student.";
+                    } else {
+                        scanStatus.innerText = "Scanning student QR card...";
+                    }
                 })
                 .catch(err => {
                     scanStatus.innerHTML = `<span style='color: var(--accent-rose); font-weight: 600;'>Webcam access blocked / denied.</span><br>
@@ -288,45 +294,45 @@
     function onQrSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
         isProcessing = true;
-        
-        scanStatus.innerText = "QR Code detected! Fetching student billing...";
-        
-        fetch(`/api/get-student-qr/${decodedText}/`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                pendingToken = decodedText;
-                
-                scanStatus.innerHTML = `<span style='color: var(--accent-indigo); font-weight: 600;'>QR Matched: ${data.name}</span><br>Please look at the camera to verify your face...`;
-                playBeep(); // Beep on QR scan
-                
-                setTimeout(() => {
-                    stopQRScan();
-                    qrReaderDiv.style.display = 'none';
-                    scanViewport.style.display = 'block';
-                    currentMode = 'face';
-                    
-                    // Update visual state buttons
-                    document.getElementById('modeFaceBtn').className = "btn-premium";
-                    document.getElementById('modeQrBtn').className = "btn-premium btn-secondary";
-                    
+
+        playBeep(); // Beep on every successful QR scan
+
+        if (currentMode === 'qr') {
+            // QR Mode: directly fetch student info and open fee modal
+            scanStatus.innerText = "QR Code detected! Fetching student billing...";
+            
+            fetch(`/api/get-student-qr/${decodedText}/`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    loadFeeModal(data);
                     isProcessing = false;
-                    initFaceScan();
-                }, 1000);
-            } else {
-                scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
-                setTimeout(() => {
-                    isProcessing = false;
-                }, 2000);
-            }
-        })
-        .catch(err => {
-            isProcessing = false;
-            scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Connection error. Resuming...</span>";
-            setTimeout(() => {
+                } else {
+                    scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
+                    setTimeout(() => {
+                        isProcessing = false;
+                        scanStatus.innerText = "Scanning student QR card...";
+                    }, 2000);
+                }
+            })
+            .catch(err => {
                 isProcessing = false;
-            }, 2000);
-        });
+                scanStatus.innerHTML = "<span style='color: var(--accent-rose);'>Connection error. Resuming...</span>";
+                setTimeout(() => { isProcessing = false; }, 2000);
+            });
+        } else {
+            // Two-step face mode: QR scanned (Step 1) — now switch to face scanner (Step 2)
+            scanStatus.innerHTML = `<span style='color: var(--accent-indigo); font-weight: 600;'>QR Matched!</span><br>Step 2: Please look at the camera to verify face...`;
+            pendingToken = decodedText;
+            
+            setTimeout(() => {
+                stopQRScan();
+                qrReaderDiv.style.display = 'none';
+                scanViewport.style.display = 'block';
+                isProcessing = false;
+                initFaceScan();
+            }, 800);
+        }
     }
 
     function onQrError(err) {}
@@ -344,7 +350,7 @@
             document.getElementById('manualCheckinContainer').style.display = 'block';
             return;
         }
-        scanStatus.innerText = pendingToken ? "Starting face scanner for linked verification..." : "Requesting webcam for Face scan...";
+        scanStatus.innerText = "Step 2: Align student face. Detecting...";
         
         navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } })
             .then(stream => {
@@ -359,8 +365,7 @@
                     previewVideo.style.transform = "scaleX(-1)";
                 }
                 
-                scanStatus.innerText = "Align student face. Detecting...";
-                
+                scanStatus.innerText = "Step 2: Align student face. Detecting...";
                 faceInterval = setInterval(captureFaceFrame, 1500);
             })
             .catch(err => {
@@ -429,26 +434,17 @@
                 playBeep();
                 stopFaceScan();
                 
-                // Let's look:
-                // If we pass `action: 'identify'`, it skips the `AttendanceRecord` creation, skips the unique attendance check, and returns student info: ID, name, batch, monthly_fee, next_due_date, and recommended next due date.
-                // Let's write a small update to `coaching/views.py` `verify_face_api` to check for `action == 'identify'`!
-                // Let's inspect `verify_face_api` in `views.py` around line 480 to 520.
-                // Yes! We will edit `views.py` to support `action == 'identify'`!
-                // Let's do that in a moment. Let's first finish writing the JS in `scanner_fees.html`.
-                
-                // Let's assume verify_face_api returns:
-                // 'success': True, 'student_id': matched_profile.id, 'student_name': matched_profile.user.get_full_name(), 'batch': matched_profile.batch.name, 'monthly_fee': str(matched_profile.monthly_fee), 'recommended_due_date': ...
                 const feeData = {
                     id: data.student_id,
                     name: data.student_name,
                     batch: data.batch,
                     monthly_fee: data.monthly_fee,
-                    recommended_due_date: data.recommended_due_date
+                    recommended_due_date: data.recommended_due_date,
+                    face_data: data.face_data
                 };
                 loadFeeModal(feeData);
             } else {
                 scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
-                isProcessing = false;
             }
         })
         .catch(err => {
@@ -461,15 +457,17 @@
         document.getElementById('modalStudentName').innerText = data.name;
         document.getElementById('modalStudentBatch').innerText = data.batch;
         document.getElementById('fee_amount').value = data.monthly_fee;
-        document.getElementById('next_due').value = data.recommended_due_date;
+        document.getElementById('next_due').value = data.recommended_due_date || data.next_due_date;
         
+        const photoEl = document.getElementById('modalStudentPhoto');
+        const placeholderEl = document.getElementById('modalStudentPhotoPlaceholder');
         if (data.face_data) {
-            document.getElementById('modalStudentPhoto').src = data.face_data;
-            document.getElementById('modalStudentPhoto').style.display = 'block';
-            document.getElementById('modalStudentPhotoPlaceholder').style.display = 'none';
+            photoEl.src = data.face_data;
+            photoEl.style.display = 'block';
+            placeholderEl.style.display = 'none';
         } else {
-            document.getElementById('modalStudentPhoto').style.display = 'none';
-            document.getElementById('modalStudentPhotoPlaceholder').style.display = 'block';
+            photoEl.style.display = 'none';
+            placeholderEl.style.display = 'block';
         }
         
         document.getElementById('feeCollectionForm').action = `/student/collect-fee/${data.id}/`;
@@ -481,13 +479,22 @@
     function closeFeeModal() {
         feeModal.style.display = 'none';
         isProcessing = false;
+        pendingToken = null;
         
         // Resume scanning when modal is closed
         if (currentMode === 'qr') {
-            if (html5QrCode) html5QrCode.resume();
             scanStatus.innerText = "Scanning student QR card...";
+            if (html5QrCode) {
+                html5QrCode.resume();
+            } else {
+                initQRScan();
+            }
         } else {
-            initFaceScan();
+            // Back to step 1 for two-step mode
+            stopFaceScan();
+            qrReaderDiv.style.display = 'block';
+            scanViewport.style.display = 'none';
+            initQRScan();
         }
     }
 
