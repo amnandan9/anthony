@@ -141,6 +141,7 @@
     let isProcessing = false;
     let currentFacingMode = "user"; // "user" or "environment"
     let pendingToken = null; // linked verification student token
+    let feeModalTimeout = null;
 
     const scanStatus = document.getElementById('scanStatus');
     const scanViewport = document.getElementById('scanViewport');
@@ -305,7 +306,6 @@
             .then(data => {
                 if (data.success) {
                     loadFeeModal(data);
-                    isProcessing = false;
                 } else {
                     scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
                     setTimeout(() => {
@@ -427,7 +427,6 @@
         })
         .then(res => res.json())
         .then(data => {
-            isProcessing = false;
             if (data.success) {
                 // Play beep and stop camera feed to open modal
                 playBeep();
@@ -443,6 +442,7 @@
                 };
                 loadFeeModal(feeData);
             } else {
+                isProcessing = false;
                 scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
             }
         })
@@ -453,6 +453,11 @@
     }
 
     function loadFeeModal(data) {
+        if (feeModalTimeout) {
+            clearTimeout(feeModalTimeout);
+            feeModalTimeout = null;
+        }
+
         document.getElementById('modalStudentName').innerText = data.name;
         document.getElementById('modalStudentBatch').innerText = data.batch;
         document.getElementById('fee_amount').value = data.monthly_fee;
@@ -473,9 +478,26 @@
         
         feeModal.style.display = 'flex';
         scanStatus.innerText = "Billing modal loaded for " + data.name;
+
+        // Schedule auto-close after 20 seconds
+        feeModalTimeout = setTimeout(closeFeeModal, 20000);
+
+        // Cancel auto-close if teacher interacts with any input
+        document.querySelectorAll('#feeCollectionForm input').forEach(input => {
+            input.onfocus = () => {
+                if (feeModalTimeout) {
+                    clearTimeout(feeModalTimeout);
+                    feeModalTimeout = null;
+                }
+            };
+        });
     }
 
     function closeFeeModal() {
+        if (feeModalTimeout) {
+            clearTimeout(feeModalTimeout);
+            feeModalTimeout = null;
+        }
         feeModal.style.display = 'none';
         isProcessing = false;
         pendingToken = null;
@@ -489,11 +511,10 @@
                 initQRScan();
             }
         } else {
-            // Back to step 1 for two-step mode
-            stopFaceScan();
-            qrReaderDiv.style.display = 'block';
-            scanViewport.style.display = 'none';
-            initQRScan();
+            // Stay in direct Face scan mode
+            scanStatus.innerText = "Align your face. Detecting...";
+            scanViewport.style.display = 'block';
+            initFaceScan();
         }
     }
 

@@ -176,6 +176,7 @@
     let isProcessing = false;
     let currentFacingMode = "user"; // "user" or "environment"
     let pendingToken = null; // linked verification student token
+    let modalTimeout = null;
 
     const scanStatus = document.getElementById('scanStatus');
     const scanViewport = document.getElementById('scanViewport');
@@ -341,13 +342,6 @@
             .then(data => {
                 if (data.success || data.already_marked) {
                     openAttendanceSuccessModal(data);
-                    
-                    // Reset scanner for next student after 4 seconds
-                    setTimeout(() => {
-                        closeAttendanceSuccessModal();
-                        isProcessing = false;
-                        scanStatus.innerText = "Scanning for QR Code cards...";
-                    }, 4000);
                 } else {
                     scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
                     setTimeout(() => {
@@ -479,13 +473,6 @@
             if (data.success || data.already_marked) {
                 playBeep(); // Beep on match
                 openAttendanceSuccessModal(data);
-                
-                // Switch back to QR mode automatically after 4 seconds
-                setTimeout(() => {
-                    closeAttendanceSuccessModal();
-                    setMode('qr');
-                    isProcessing = false;
-                }, 4000);
             } else {
                 isProcessing = false;
                 scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
@@ -500,6 +487,11 @@
     const attendanceSuccessModal = document.getElementById('attendanceSuccessModal');
 
     function openAttendanceSuccessModal(data) {
+        if (modalTimeout) {
+            clearTimeout(modalTimeout);
+            modalTimeout = null;
+        }
+
         const headerEl = document.getElementById('popupHeader');
         if (data.success || data.already_marked) {
             const isLate = data.status === 'late';
@@ -552,10 +544,27 @@
 
         // Show modal overlay
         attendanceSuccessModal.style.display = 'flex';
+        
+        // Schedule auto-close after 20 seconds
+        modalTimeout = setTimeout(closeAttendanceSuccessModal, 20000);
     }
 
     function closeAttendanceSuccessModal() {
+        if (modalTimeout) {
+            clearTimeout(modalTimeout);
+            modalTimeout = null;
+        }
         attendanceSuccessModal.style.display = 'none';
+        
+        // Reset scanner state
+        isProcessing = false;
+        if (document.getElementById('manualCheckinContainer').style.display === 'block') {
+            scanStatus.innerText = "Waiting for manual token entry...";
+        } else if (currentMode === 'qr') {
+            scanStatus.innerText = "Scanning for QR Code cards...";
+        } else {
+            scanStatus.innerText = "Align your face. Detecting...";
+        }
     }
 
     function toggleManualCheckin() {
@@ -602,19 +611,6 @@
             tokenInput.value = '';
             if (data.success || data.already_marked) {
                 openAttendanceSuccessModal(data);
-                
-                // Allow new scans
-                setTimeout(() => {
-                    if (document.getElementById('manualCheckinContainer').style.display === 'none') {
-                        if (currentMode === 'qr') {
-                            scanStatus.innerText = "Scanning for QR Code cards...";
-                        } else {
-                            scanStatus.innerText = "Align your face. Detecting...";
-                        }
-                    } else {
-                        scanStatus.innerText = "Waiting for manual token entry...";
-                    }
-                }, 2500);
             } else {
                 scanStatus.innerHTML = `<span style='color: var(--accent-rose);'>${data.message}</span>`;
             }
