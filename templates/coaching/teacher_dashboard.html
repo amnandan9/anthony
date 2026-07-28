@@ -128,8 +128,8 @@
                     <tr>
                         <th>Student</th>
                         <th>Batch</th>
-                        <th>Next Due</th>
-                        <th>Status</th>
+                        <th>Today's Attendance</th>
+                        <th>Fee Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -141,7 +141,33 @@
                             <div style="font-size: 0.75rem; color: var(--text-secondary);">@{{ student.user.username }}</div>
                         </td>
                         <td>{{ student.batch.name|default:"Unassigned" }}</td>
-                        <td>{{ student.next_due_date|date:"M d, Y" }}</td>
+                        <td>
+                            <div id="att-cell-{{ student.id }}">
+                                {% if student.is_batch_locked_today %}
+                                    {% if student.today_record and student.today_record.status == 'present' %}
+                                        <span class="badge badge-success" title="Batch attendance locked for today"><i class="fa-solid fa-lock" style="margin-right: 4px;"></i> Present</span>
+                                    {% elif student.today_record and student.today_record.status == 'late' %}
+                                        <span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.4);" title="Batch attendance locked for today"><i class="fa-solid fa-lock" style="margin-right: 4px;"></i> Late ({{ student.today_record.minutes_late }}m)</span>
+                                    {% else %}
+                                        <span class="badge badge-danger" title="Batch attendance locked for today"><i class="fa-solid fa-lock" style="margin-right: 4px;"></i> Absent</span>
+                                    {% endif %}
+                                {% else %}
+                                    {% if student.today_record and student.today_record.status == 'present' %}
+                                        <button onclick="toggleStudentAtt({{ student.id }}, 'absent')" class="btn-premium" style="padding: 5px 10px; font-size: 0.75rem; background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); border: 1px solid var(--accent-emerald);">
+                                            <i class="fa-solid fa-circle-check" style="margin-right: 4px;"></i> Present (On Time)
+                                        </button>
+                                    {% elif student.today_record and student.today_record.status == 'late' %}
+                                        <button onclick="toggleStudentAtt({{ student.id }}, 'absent')" class="btn-premium" style="padding: 5px 10px; font-size: 0.75rem; background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber);">
+                                            <i class="fa-solid fa-clock" style="margin-right: 4px;"></i> Late ({{ student.today_record.minutes_late }}m)
+                                        </button>
+                                    {% else %}
+                                        <button onclick="toggleStudentAtt({{ student.id }}, 'present')" class="btn-premium btn-secondary" style="padding: 5px 10px; font-size: 0.75rem;">
+                                            <i class="fa-solid fa-circle-plus" style="margin-right: 4px;"></i> Mark Present
+                                        </button>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
                         <td>
                             {% if student.is_paid_this_month %}
                                 <span class="badge badge-success">Paid</span>
@@ -385,6 +411,44 @@
         drawCalendar(currentYear, currentMonth);
     }
 
+    function toggleStudentAtt(studentId, targetAction) {
+        const cell = document.getElementById(`att-cell-${studentId}`);
+        if (!cell) return;
+        cell.style.opacity = '0.5';
+
+        fetch("{% url 'toggle_student_attendance_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                action: targetAction
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            cell.style.opacity = '1';
+            if (data.success) {
+                if (data.status === 'present') {
+                    cell.innerHTML = `<button onclick="toggleStudentAtt(${studentId}, 'absent')" class="btn-premium" style="padding: 5px 10px; font-size: 0.75rem; background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); border: 1px solid var(--accent-emerald);"><i class="fa-solid fa-circle-check" style="margin-right: 4px;"></i> Present (${data.timing_str || 'On Time'})</button>`;
+                } else if (data.status === 'late') {
+                    cell.innerHTML = `<button onclick="toggleStudentAtt(${studentId}, 'absent')" class="btn-premium" style="padding: 5px 10px; font-size: 0.75rem; background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber);"><i class="fa-solid fa-clock" style="margin-right: 4px;"></i> Late (${data.minutes_late}m)</button>`;
+                } else {
+                    cell.innerHTML = `<button onclick="toggleStudentAtt(${studentId}, 'present')" class="btn-premium btn-secondary" style="padding: 5px 10px; font-size: 0.75rem;"><i class="fa-solid fa-circle-plus" style="margin-right: 4px;"></i> Mark Present</button>`;
+                }
+            } else {
+                alert(data.message || 'Action failed.');
+            }
+        })
+        .catch(err => {
+            cell.style.opacity = '1';
+            console.error(err);
+            alert('Server communication error.');
+        });
+    }
+
     function toggleBatchLock(batchId, dateStr) {
         const btn = document.getElementById(`lock-btn-${batchId}`);
         const badge = document.getElementById(`lock-badge-${batchId}`);
@@ -406,17 +470,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                if (data.is_locked) {
-                    badge.className = 'badge badge-danger';
-                    badge.innerText = 'Submitted (Locked)';
-                    btn.className = 'btn-premium btn-secondary';
-                    btn.innerHTML = '<i class="fa-solid fa-lock-open" style="margin-right: 6px;"></i> Unlock Attendance';
-                } else {
-                    badge.className = 'badge badge-success';
-                    badge.innerText = 'Draft (Unlocked)';
-                    btn.className = 'btn-premium';
-                    btn.innerHTML = '<i class="fa-solid fa-lock" style="margin-right: 6px;"></i> Submit & Lock for Day';
-                }
+                location.reload();
             } else {
                 alert(data.message || 'Action failed.');
             }

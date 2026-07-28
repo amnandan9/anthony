@@ -41,6 +41,7 @@ urlpatterns = [
     # AJAX API Endpoints
     path('api/mark-attendance/', views.mark_attendance_api, name='mark_attendance_api'),
     path('api/toggle-attendance-lock/', views.toggle_attendance_lock_api, name='toggle_attendance_lock_api'),
+    path('api/toggle-student-attendance/', views.toggle_student_attendance_api, name='toggle_student_attendance_api'),
     path('api/get-student-qr/<str:qr_token>/', views.get_student_by_qr, name='get_student_by_qr'),
     path('api/public-student-info/', views.public_student_info, name='public_student_info'),
 ]

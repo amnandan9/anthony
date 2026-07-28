@@ -202,15 +202,19 @@ def teacher_dashboard(request):
     elif due_filter == 'cleared':
         students = students.filter(id__in=paid_student_ids)
 
-    # Attach is_paid_this_month helper
+    todays_att_map = {rec.student_id: rec for rec in AttendanceRecord.objects.filter(date=today)}
+    todays_locks = {lock.batch_id: lock.is_locked for lock in DailyBatchAttendanceLock.objects.filter(date=today)}
+
+    # Attach is_paid_this_month, today_record, and is_batch_locked_today helpers
     for student in students:
         student.is_paid_this_month = student.id in paid_student_ids
+        student.today_record = todays_att_map.get(student.id)
+        student.is_batch_locked_today = todays_locks.get(student.batch_id, False) if student.batch_id else False
 
     # 3. Calendar classes & events
     classes_this_month = ClassSchedule.objects.filter(date__year=today.year, date__month=today.month)
     
     batches = list(Batch.objects.all())
-    todays_locks = {lock.batch_id: lock.is_locked for lock in DailyBatchAttendanceLock.objects.filter(date=today)}
     for b in batches:
         b.is_locked_today = todays_locks.get(b.id, False)
 
@@ -534,8 +538,8 @@ def mark_attendance_api(request):
                 schedule = ClassSchedule.objects.filter(batch=profile.batch, date=today, is_holiday=False).first()
                 if schedule:
                     batch_start_time = schedule.start_time
-                elif profile.batch.start_time:
-                    batch_start_time = profile.batch.start_time
+                else:
+                    batch_start_time = profile.batch.get_effective_start_time()
 
             now_local = timezone.localtime()
             current_time = now_local.time()
@@ -683,6 +687,102 @@ def toggle_attendance_lock_api(request):
             return JsonResponse({'success': False, 'message': str(e)})
 
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
+
+@csrf_exempt
+@login_required
+@role_required('teacher', 'super_admin')
+def toggle_student_attendance_api(request):
+    """
+    API endpoint for Teachers and Admins to toggle attendance status ('present' or 'absent') for an individual student.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        student_id = data.get('student_id')
+        target_action = data.get('action') # 'present', 'absent', or 'toggle'
+        today = timezone.localdate()
+
+        student = get_object_or_404(StudentProfile, id=student_id)
+
+        # Check Daily Batch Lock
+        if student.batch:
+            lock = DailyBatchAttendanceLock.objects.filter(batch=student.batch, date=today).first()
+            if lock and lock.is_locked:
+                return JsonResponse({
+                    'success': False,
+                    'is_locked': True,
+                    'message': f'Attendance for batch "{student.batch.name}" is submitted and locked for today. Unlock the batch to modify.'
+                })
+
+        record = AttendanceRecord.objects.filter(student=student, date=today).first()
+
+        if target_action == 'absent':
+            if record:
+                record.delete()
+            return JsonResponse({
+                'success': True,
+                'status': 'absent',
+                'minutes_late': 0,
+                'message': f'Marked {student.user.get_full_name()} as Absent.'
+            })
+        else: # 'present' or toggle
+            if target_action == 'toggle' and record and record.status in ['present', 'late']:
+                record.delete()
+                return JsonResponse({
+                    'success': True,
+                    'status': 'absent',
+                    'minutes_late': 0,
+                    'message': f'Marked {student.user.get_full_name()} as Absent.'
+                })
+
+            batch_start_time = datetime.time(9, 0)
+            if student.batch:
+                schedule = ClassSchedule.objects.filter(batch=student.batch, date=today, is_holiday=False).first()
+                if schedule:
+                    batch_start_time = schedule.start_time
+                else:
+                    batch_start_time = student.batch.get_effective_start_time()
+
+            now_local = timezone.localtime()
+            current_time = now_local.time()
+            now_dt = datetime.datetime.combine(today, current_time)
+            start_dt = datetime.datetime.combine(today, batch_start_time)
+            diff_minutes = int((now_dt - start_dt).total_seconds() / 60)
+
+            if diff_minutes > 20:
+                determined_status = 'late'
+                minutes_late = diff_minutes
+            else:
+                determined_status = 'present'
+                minutes_late = max(0, diff_minutes)
+
+            if record:
+                record.status = determined_status
+                record.minutes_late = minutes_late
+                record.marked_by = 'teacher'
+                record.save()
+            else:
+                record = AttendanceRecord.objects.create(
+                    student=student,
+                    date=today,
+                    status=determined_status,
+                    minutes_late=minutes_late,
+                    marked_by='teacher'
+                )
+
+            timing_str = "On time" if minutes_late == 0 else f"{minutes_late}m late"
+            return JsonResponse({
+                'success': True,
+                'status': record.status,
+                'minutes_late': record.minutes_late,
+                'timing_str': timing_str,
+                'message': f'Marked {student.user.get_full_name()} as {record.get_status_display()} ({timing_str}).'
+            })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
 @login_required
 @teacher_required

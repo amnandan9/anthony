@@ -25,10 +25,19 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # In production set:  export ALLOWED_HOSTS="yourusername.pythonanywhere.com"
 _raw_hosts = os.environ.get('ALLOWED_HOSTS', '')
-ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()] or ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()] or [
+    '127.0.0.1',
+    'localhost',
+    'anthonycoaching.pythonanywhere.com',
+    '.pythonanywhere.com',
+    '*'
+]
 
 CSRF_TRUSTED_ORIGINS = [
-    f'https://{h}' for h in ALLOWED_HOSTS if not h.startswith('127') and not h.startswith('localhost')
+    'https://anthonycoaching.pythonanywhere.com',
+    'https://*.pythonanywhere.com',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
 ]
 
 

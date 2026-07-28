@@ -80,7 +80,25 @@
             </div>
         </div>
         
-        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">3. Fees and Billing Parameters</h4>
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">3. Student Profile Photo (Gallery Upload)</h4>
+        <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 20px; border-radius: 16px; margin-bottom: 24px; text-align: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                <div style="width: 130px; height: 130px; border-radius: 50%; overflow: hidden; background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center; border: 2px solid var(--accent-indigo);">
+                    <img id="studentPhotoPreview" style="display:none; width: 100%; height: 100%; object-fit: cover;">
+                    <i class="fa-solid fa-user-gear" id="studentPhotoIcon" style="font-size: 2.5rem; color: var(--text-secondary);"></i>
+                </div>
+                <input type="hidden" name="face_data" id="studentPhotoInput">
+                
+                <div>
+                    <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('galleryFileInput').click()" style="font-size: 0.85rem; padding: 8px 16px;">
+                        <i class="fa-solid fa-image" style="margin-right: 6px;"></i> Upload Photo from Gallery
+                    </button>
+                    <input type="file" accept="image/*" id="galleryFileInput" style="display: none;" onchange="handleGalleryPhotoSelect(this)">
+                </div>
+            </div>
+        </div>
+        
+        <h4 style="color: var(--accent-indigo); margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">4. Fees and Billing Parameters</h4>
         
         <div class="form-grid" style="margin-bottom: 30px;">
             <div class="form-group">
@@ -114,6 +132,22 @@
             const mm = String(joining.getMonth() + 1).padStart(2, '0');
             const dd = String(joining.getDate()).padStart(2, '0');
             dueInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+    }
+
+    function handleGalleryPhotoSelect(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const dataUrl = e.target.result;
+                document.getElementById('studentPhotoInput').value = dataUrl;
+                const preview = document.getElementById('studentPhotoPreview');
+                preview.src = dataUrl;
+                preview.style.display = 'block';
+                const icon = document.getElementById('studentPhotoIcon');
+                if (icon) icon.style.display = 'none';
+            };
+            reader.readAsDataURL(input.files[0]);
         }
     }
 

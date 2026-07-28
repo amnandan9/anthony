@@ -24,12 +24,35 @@ class User(AbstractUser):
 class Batch(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    timing = models.CharField(max_length=100, help_text="e.g. Mon-Wed-Fri 4:00 PM - 5:30 PM")
-    start_time = models.TimeField(default='09:00:00', help_text="Batch start time (e.g. 16:00 for 4:00 PM)")
+    timing = models.CharField(max_length=100, help_text="e.g. Mon-Wed-Fri 7:15 PM - 8:15 PM")
+    start_time = models.TimeField(default='09:00:00', help_text="Batch start time (e.g. 19:15 for 7:15 PM)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "Batches"
+
+    def get_effective_start_time(self):
+        import re, datetime
+        # If start_time was explicitly set (not default 09:00:00), return start_time
+        if self.start_time and str(self.start_time) != '09:00:00' and self.start_time != datetime.time(9, 0):
+            return self.start_time
+        
+        # Smart parse from timing string: e.g. "Mon-Fri 7:15 PM - 8:15 PM" or "7:15 PM"
+        if self.timing:
+            match = re.search(r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?', self.timing)
+            if match:
+                hrs = int(match.group(1))
+                mins = int(match.group(2))
+                ampm = match.group(3)
+                if ampm:
+                    ampm = ampm.upper()
+                    if ampm == 'PM' and hrs < 12:
+                        hrs += 12
+                    elif ampm == 'AM' and hrs == 12:
+                        hrs = 0
+                return datetime.time(hrs, mins)
+        
+        return self.start_time or datetime.time(9, 0)
 
     def __str__(self):
         return self.name
