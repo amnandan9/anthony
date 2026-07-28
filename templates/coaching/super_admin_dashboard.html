@@ -102,7 +102,7 @@
                         {% if batch.is_locked_today %}Locked{% else %}Unlocked{% endif %}
                     </span>
                 </div>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">{{ batch.timing }} (Starts {{ batch.start_time|time:"h:i A" }})</p>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">{{ batch.timing }} (Starts {{ batch.get_effective_start_time|time:"h:i A" }})</p>
                 <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.8rem;">
                     <span>Enrolled: <strong>{{ batch.students.count }}</strong></span>
                 </div>

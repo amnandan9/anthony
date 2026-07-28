@@ -62,7 +62,7 @@
                             {% if batch.is_locked_today %}Submitted (Locked){% else %}Draft (Unlocked){% endif %}
                         </span>
                     </div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 6px;">Start Time: {{ batch.start_time|time:"h:i A" }}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 6px;">Start Time: {{ batch.get_effective_start_time|time:"h:i A" }}</div>
                 </div>
                 <div style="margin-top: 14px;">
                     <button onclick="toggleBatchLock({{ batch.id }}, '{{ today|date:'Y-m-d' }}')" id="lock-btn-{{ batch.id }}" class="btn-premium {% if batch.is_locked_today %}btn-secondary{% endif %}" style="width: 100%; padding: 8px 12px; font-size: 0.8rem;">
