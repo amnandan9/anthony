@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule
+from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule, DailyBatchAttendanceLock
 
 # Extend default UserAdmin to support role field editing
 @admin.register(User)
@@ -9,15 +9,15 @@ class CustomUserAdmin(UserAdmin):
     list_filter = ('role', 'is_active', 'is_staff', 'is_superuser')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     fieldsets = UserAdmin.fieldsets + (
-        ('Role & Profile Parameters', {'fields': ('role', 'face_data')}),
+        ('Role Parameters', {'fields': ('role',)}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Role & Profile Parameters', {'fields': ('role', 'face_data')}),
+        ('Role Parameters', {'fields': ('role',)}),
     )
 
 @admin.register(Batch)
 class BatchAdmin(admin.ModelAdmin):
-    list_display = ('name', 'timing', 'created_at')
+    list_display = ('name', 'start_time', 'timing', 'created_at')
     search_fields = ('name', 'description')
 
 @admin.register(StudentProfile)
@@ -32,9 +32,15 @@ class StudentProfileAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceRecord)
 class AttendanceRecordAdmin(admin.ModelAdmin):
-    list_display = ('student', 'date', 'time_in', 'status', 'marked_by')
+    list_display = ('student', 'date', 'time_in', 'status', 'minutes_late', 'marked_by')
     list_filter = ('date', 'status', 'marked_by')
     search_fields = ('student__user__username', 'student__user__first_name', 'student__user__last_name')
+
+@admin.register(DailyBatchAttendanceLock)
+class DailyBatchAttendanceLockAdmin(admin.ModelAdmin):
+    list_display = ('batch', 'date', 'is_locked', 'locked_at', 'locked_by')
+    list_filter = ('date', 'is_locked', 'batch')
+    search_fields = ('batch__name',)
 
 @admin.register(FeePayment)
 class FeePaymentAdmin(admin.ModelAdmin):
@@ -50,3 +56,4 @@ class ClassScheduleAdmin(admin.ModelAdmin):
 
 # Limit Django Admin Panel access strictly to Superusers only
 admin.site.has_permission = lambda request: request.user.is_active and request.user.is_superuser
+

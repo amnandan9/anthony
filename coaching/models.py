@@ -25,6 +25,7 @@ class Batch(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     timing = models.CharField(max_length=100, help_text="e.g. Mon-Wed-Fri 4:00 PM - 5:30 PM")
+    start_time = models.TimeField(default='09:00:00', help_text="Batch start time (e.g. 16:00 for 4:00 PM)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -44,8 +45,7 @@ class StudentProfile(models.Model):
     monthly_fee = models.DecimalField(max_digits=10, decimal_places=2)
     next_due_date = models.DateField()
     qr_code_token = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
-    # Storing reference image for face verification
-    face_data = models.TextField(blank=True, null=True, help_text="Base64 encoded profile photo for frontend verification")
+    face_data = models.TextField(blank=True, null=True, help_text="Deprecated photo data")
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username
@@ -53,7 +53,6 @@ class StudentProfile(models.Model):
 class AttendanceRecord(models.Model):
     MARKED_BY_CHOICES = (
         ('self_qr', 'Self QR Scan'),
-        ('self_face', 'Self Face Verification'),
         ('teacher', 'Teacher'),
     )
     STATUS_CHOICES = (
@@ -65,6 +64,7 @@ class AttendanceRecord(models.Model):
     date = models.DateField(default=timezone.now)
     time_in = models.TimeField(auto_now_add=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='present')
+    minutes_late = models.IntegerField(default=0, help_text="Minutes late relative to batch start time")
     marked_by = models.CharField(max_length=20, choices=MARKED_BY_CHOICES, default='teacher')
 
     class Meta:
@@ -75,6 +75,23 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.date} ({self.get_status_display()})"
+
+class DailyBatchAttendanceLock(models.Model):
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='attendance_locks')
+    date = models.DateField(default=timezone.now)
+    is_locked = models.BooleanField(default=True)
+    locked_at = models.DateTimeField(auto_now=True)
+    locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['batch', 'date'], name='unique_batch_daily_lock')
+        ]
+        ordering = ['-date']
+
+    def __str__(self):
+        status = "Locked" if self.is_locked else "Unlocked"
+        return f"{self.batch.name} - {self.date} ({status})"
 
 class FeePayment(models.Model):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='payments')

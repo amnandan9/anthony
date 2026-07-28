@@ -88,20 +88,27 @@
         </div>
     </div>
 
-    <!-- Quick info card / Batches overview -->
+    <!-- Quick info card / Batches overview & Locks -->
     <div class="card-premium">
-        <h2>Batches Overview</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem;">Current active coaching batches</p>
+        <h2>Batches & Lock Status</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem;">Manage daily attendance submission locks</p>
         
         <div style="display: flex; flex-direction: column; gap: 16px;">
             {% for batch in batches %}
             <div style="padding: 16px; background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px;">
-                <h4 style="color: var(--accent-indigo);">{{ batch.name }}</h4>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">{{ batch.timing }}</p>
-                <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.8rem;">
-                    <span>Enrolled Students:</span>
-                    <strong>{{ batch.students.count }}</strong>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="color: var(--accent-indigo);">{{ batch.name }}</h4>
+                    <span id="admin-lock-badge-{{ batch.id }}" class="badge {% if batch.is_locked_today %}badge-danger{% else %}badge-success{% endif %}">
+                        {% if batch.is_locked_today %}Locked{% else %}Unlocked{% endif %}
+                    </span>
                 </div>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">{{ batch.timing }} (Starts {{ batch.start_time|time:"h:i A" }})</p>
+                <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <span>Enrolled: <strong>{{ batch.students.count }}</strong></span>
+                </div>
+                <button onclick="toggleAdminBatchLock({{ batch.id }}, '{{ today|date:'Y-m-d' }}')" id="admin-lock-btn-{{ batch.id }}" class="btn-premium {% if batch.is_locked_today %}btn-secondary{% endif %}" style="width: 100%; padding: 6px 10px; font-size: 0.8rem; margin-top: 10px;">
+                    {% if batch.is_locked_today %}<i class="fa-solid fa-lock-open"></i> Unlock{% else %}<i class="fa-solid fa-lock"></i> Lock for Today{% endif %}
+                </button>
             </div>
             {% endfor %}
         </div>
@@ -168,6 +175,48 @@
         if (event.target == modal) {
             closeModal();
         }
+    }
+
+    function toggleAdminBatchLock(batchId, dateStr) {
+        const btn = document.getElementById(`admin-lock-btn-${batchId}`);
+        const badge = document.getElementById(`admin-lock-badge-${batchId}`);
+        const isCurrentlyLocked = badge.classList.contains('badge-danger');
+        const newLockState = !isCurrentlyLocked;
+
+        fetch("{% url 'toggle_attendance_lock_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                batch_id: batchId,
+                date: dateStr,
+                is_locked: newLockState
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (data.is_locked) {
+                    badge.className = 'badge badge-danger';
+                    badge.innerText = 'Locked';
+                    btn.className = 'btn-premium btn-secondary';
+                    btn.innerHTML = '<i class="fa-solid fa-lock-open"></i> Unlock';
+                } else {
+                    badge.className = 'badge badge-success';
+                    badge.innerText = 'Unlocked';
+                    btn.className = 'btn-premium';
+                    btn.innerHTML = '<i class="fa-solid fa-lock"></i> Lock for Today';
+                }
+            } else {
+                alert(data.message || 'Action failed.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Server communication error.');
+        });
     }
 </script>
 {% endblock %}

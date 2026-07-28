@@ -44,7 +44,40 @@
     </div>
 </div>
 
-<div class="dashboard-sections">
+    <!-- Daily Attendance Lock & Submit Section -->
+    <div class="card-premium" style="margin-bottom: 24px; width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h3 style="color: var(--accent-indigo); margin-bottom: 4px;"><i class="fa-solid fa-lock" style="margin-right: 6px;"></i> Daily Attendance Submission Lock</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary);">Submit and lock attendance for the day. Once submitted, editing and re-submitting is disabled.</p>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px;">
+            {% for batch in batches %}
+            <div style="padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 1rem; color: var(--text-primary);">{{ batch.name }}</strong>
+                        <span id="lock-badge-{{ batch.id }}" class="badge {% if batch.is_locked_today %}badge-danger{% else %}badge-success{% endif %}">
+                            {% if batch.is_locked_today %}Submitted (Locked){% else %}Draft (Unlocked){% endif %}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 6px;">Start Time: {{ batch.start_time|time:"h:i A" }}</div>
+                </div>
+                <div style="margin-top: 14px;">
+                    <button onclick="toggleBatchLock({{ batch.id }}, '{{ today|date:'Y-m-d' }}')" id="lock-btn-{{ batch.id }}" class="btn-premium {% if batch.is_locked_today %}btn-secondary{% endif %}" style="width: 100%; padding: 8px 12px; font-size: 0.8rem;">
+                        {% if batch.is_locked_today %}
+                            <i class="fa-solid fa-lock-open" style="margin-right: 6px;"></i> Unlock Attendance
+                        {% else %}
+                            <i class="fa-solid fa-lock" style="margin-right: 6px;"></i> Submit & Lock for Day
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
     <div class="card-premium">
         <div class="card-header-flex" style="flex-wrap: wrap; gap: 8px;">
             <h2>Student Directory</h2>
@@ -350,6 +383,48 @@
             currentYear++;
         }
         drawCalendar(currentYear, currentMonth);
+    }
+
+    function toggleBatchLock(batchId, dateStr) {
+        const btn = document.getElementById(`lock-btn-${batchId}`);
+        const badge = document.getElementById(`lock-badge-${batchId}`);
+        const isCurrentlyLocked = badge.classList.contains('badge-danger');
+        const newLockState = !isCurrentlyLocked;
+
+        fetch("{% url 'toggle_attendance_lock_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                batch_id: batchId,
+                date: dateStr,
+                is_locked: newLockState
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (data.is_locked) {
+                    badge.className = 'badge badge-danger';
+                    badge.innerText = 'Submitted (Locked)';
+                    btn.className = 'btn-premium btn-secondary';
+                    btn.innerHTML = '<i class="fa-solid fa-lock-open" style="margin-right: 6px;"></i> Unlock Attendance';
+                } else {
+                    badge.className = 'badge badge-success';
+                    badge.innerText = 'Draft (Unlocked)';
+                    btn.className = 'btn-premium';
+                    btn.innerHTML = '<i class="fa-solid fa-lock" style="margin-right: 6px;"></i> Submit & Lock for Day';
+                }
+            } else {
+                alert(data.message || 'Action failed.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Server communication error.');
+        });
     }
 
     // Init drawing

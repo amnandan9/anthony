@@ -145,7 +145,25 @@ class AttendanceLogicTests(TestCase):
         self.assertEqual(response2.status_code, 200)
         data2 = response2.json()
         self.assertFalse(data2['success'])
-        self.assertIn('already marked present', data2['message'])
+        self.assertIn('already marked', data2['message'])
         
         # Verify record count is still 1
         self.assertEqual(AttendanceRecord.objects.filter(student=self.profile).count(), 1)
+
+    def test_attendance_lock(self):
+        """
+        Verify that locking a batch prevents marking attendance for that batch.
+        """
+        from coaching.models import DailyBatchAttendanceLock
+        DailyBatchAttendanceLock.objects.create(batch=self.batch, date=timezone.localdate(), is_locked=True)
+        
+        response = self.client.post(
+            reverse('mark_attendance_api'),
+            data={'qr_token': 'QR-BOB-TOKEN', 'marked_by': 'self_qr'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertTrue(data.get('is_locked'))
+        self.assertIn('submitted and locked for today', data['message'])

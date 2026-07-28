@@ -9,11 +9,7 @@
     <div style="display: flex; flex-direction: column; gap: 24px;">
         <div class="profile-card-left">
             <div class="student-avatar" id="avatarContainer">
-                {% if profile.face_data %}
-                    <img src="{{ profile.face_data }}" alt="Student Face Profile">
-                {% else %}
-                    <i class="fa-solid fa-user"></i>
-                {% endif %}
+                <i class="fa-solid fa-user"></i>
             </div>
             
             <h2 style="margin-bottom: 4px;">{{ profile.user.get_full_name }}</h2>
@@ -178,7 +174,7 @@
         <!-- Attendance Logs -->
         <div class="card-premium">
             <h3>Attendance Log</h3>
-            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Recent check-in records</p>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">Recent check-in records and late timing analysis</p>
             
             <div class="table-wrapper">
                 <table class="table-premium">
@@ -187,6 +183,7 @@
                             <th>Date</th>
                             <th>Check-in Time</th>
                             <th>Status</th>
+                            <th>Timing Delay</th>
                             <th>Marking Method</th>
                         </tr>
                     </thead>
@@ -198,15 +195,24 @@
                             <td>
                                 {% if record.status == 'present' %}
                                     <span class="badge badge-success">Present</span>
+                                {% elif record.status == 'late' %}
+                                    <span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.4);">Late</span>
                                 {% else %}
                                     <span class="badge badge-danger">Absent</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.minutes_late > 0 %}
+                                    <span style="color: var(--accent-amber); font-weight: 500;">{{ record.minutes_late }} mins late</span>
+                                {% else %}
+                                    <span style="color: var(--accent-emerald); font-weight: 500;">On time</span>
                                 {% endif %}
                             </td>
                             <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ record.get_marked_by_display }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 16px;">No attendance history logged.</td>
+                            <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 16px;">No attendance history logged.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

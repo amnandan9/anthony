@@ -14,7 +14,7 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule
+from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePayment, ClassSchedule, DailyBatchAttendanceLock
 from coaching.decorators import super_admin_required, teacher_required, student_required, role_required
 
 
@@ -95,13 +95,19 @@ def super_admin_dashboard(request):
     present_att = AttendanceRecord.objects.filter(status='present').count()
     overall_attendance = int((present_att / total_att * 100)) if total_att > 0 else 100
 
+    batches = list(Batch.objects.all())
+    todays_locks = {lock.batch_id: lock.is_locked for lock in DailyBatchAttendanceLock.objects.filter(date=today)}
+    for b in batches:
+        b.is_locked_today = todays_locks.get(b.id, False)
+
     context = {
         'teachers': teachers,
         'total_teachers': total_teachers,
         'total_students': total_students,
         'monthly_revenue': monthly_revenue,
         'overall_attendance': overall_attendance,
-        'batches': Batch.objects.all(),
+        'batches': batches,
+        'today': today,
     }
     return render(request, 'coaching/super_admin_dashboard.html', context)
 
@@ -202,8 +208,12 @@ def teacher_dashboard(request):
 
     # 3. Calendar classes & events
     classes_this_month = ClassSchedule.objects.filter(date__year=today.year, date__month=today.month)
-    batches = Batch.objects.all()
     
+    batches = list(Batch.objects.all())
+    todays_locks = {lock.batch_id: lock.is_locked for lock in DailyBatchAttendanceLock.objects.filter(date=today)}
+    for b in batches:
+        b.is_locked_today = todays_locks.get(b.id, False)
+
     # Fetch distinct attendance dates
     attendance_dates = list(AttendanceRecord.objects.values_list('date', flat=True).distinct())
     attendance_dates_json = json.dumps([d.strftime('%Y-%m-%d') for d in attendance_dates])
@@ -472,7 +482,7 @@ def scanner_fees(request):
 @login_required
 def mark_attendance_api(request):
     """
-    API endpoint to record attendance via QR scan.
+    API endpoint to record attendance via QR scan, with lock check and batch time late calculation.
     """
     if request.method == 'POST':
         try:
@@ -488,6 +498,18 @@ def mark_attendance_api(request):
                 return JsonResponse({'success': False, 'message': 'Invalid Card Token/QR. Student not found.'})
             
             today = timezone.localdate()
+            
+            # Check Daily Attendance Submission Lock
+            if profile.batch:
+                lock = DailyBatchAttendanceLock.objects.filter(batch=profile.batch, date=today).first()
+                if lock and lock.is_locked:
+                    return JsonResponse({
+                        'success': False,
+                        'is_locked': True,
+                        'message': f'Attendance for batch "{profile.batch.name}" has been submitted and locked for today ({today.strftime("%d-%m-%Y")}). No further attendance allowed.',
+                        'student_name': profile.user.get_full_name(),
+                        'batch': profile.batch.name
+                    })
             
             # Calculate current month fee status
             first_of_month = today.replace(day=1)
@@ -506,22 +528,38 @@ def mark_attendance_api(request):
                 status__in=['present', 'late']
             ).count()
             
-            # Calculate check-in time and status (present vs late)
-            from django.conf import settings
-            cutoff_str = getattr(settings, 'ATTENDANCE_LATE_CUTOFF', '09:30')
-            try:
-                hour, minute = map(int, cutoff_str.split(':'))
-                cutoff_time = datetime.time(hour, minute)
-            except Exception:
-                cutoff_time = datetime.time(9, 30)
-                
-            current_time = timezone.localtime().time()
-            determined_status = 'late' if current_time > cutoff_time else 'present'
+            # Calculate check-in time and status relative to batch start time
+            batch_start_time = datetime.time(9, 0)
+            if profile.batch:
+                schedule = ClassSchedule.objects.filter(batch=profile.batch, date=today, is_holiday=False).first()
+                if schedule:
+                    batch_start_time = schedule.start_time
+                elif profile.batch.start_time:
+                    batch_start_time = profile.batch.start_time
+
+            now_local = timezone.localtime()
+            current_time = now_local.time()
+            now_dt = datetime.datetime.combine(today, current_time)
+            start_dt = datetime.datetime.combine(today, batch_start_time)
+            diff_minutes = int((now_dt - start_dt).total_seconds() / 60)
+
+            if diff_minutes > 20:
+                determined_status = 'late'
+                minutes_late = diff_minutes
+            else:
+                determined_status = 'present'
+                minutes_late = max(0, diff_minutes)
+
+            if minutes_late <= 0:
+                timing_summary = "On time"
+            elif determined_status == 'late':
+                timing_summary = f"{minutes_late} mins late (Late)"
+            else:
+                timing_summary = f"{minutes_late} mins late (Present)"
             
             # Check if already marked for today
             existing_record = AttendanceRecord.objects.filter(student=profile, date=today).first()
             if existing_record:
-                # Calculate running batch attendance percentage
                 batch = profile.batch
                 batch_attendance_percentage = 0
                 if batch:
@@ -537,24 +575,26 @@ def mark_attendance_api(request):
                 return JsonResponse({
                     'success': False, 
                     'already_marked': True,
-                    'message': f'{profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today.',
+                    'message': f'{profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today ({existing_record.minutes_late} mins late).',
                     'student_name': profile.user.get_full_name(),
                     'batch': profile.batch.name if profile.batch else 'None',
                     'school': profile.school_college,
                     'fee_status': fee_status_str,
-                    'face_data': profile.face_data or '',
                     'status': existing_record.status,
+                    'minutes_late': existing_record.minutes_late,
+                    'timing_summary': f"{existing_record.minutes_late} mins late" if existing_record.minutes_late > 0 else "On time",
                     'time': existing_record.time_in.strftime('%I:%M %p'),
                     'batch_attendance_percentage': batch_attendance_percentage,
                     'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
                     'streak': streak
                 })
                 
-            # Create Attendance
+            # Create Attendance Record
             record = AttendanceRecord.objects.create(
                 student=profile,
                 date=today,
                 status=determined_status,
+                minutes_late=minutes_late,
                 marked_by=marked_by_type
             )
             
@@ -587,8 +627,9 @@ def mark_attendance_api(request):
                 'time': record.time_in.strftime('%I:%M %p'),
                 'school': profile.school_college,
                 'fee_status': fee_status_str,
-                'face_data': profile.face_data or '',
                 'status': record.status,
+                'minutes_late': record.minutes_late,
+                'timing_summary': timing_summary,
                 'batch_attendance_percentage': batch_attendance_percentage,
                 'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
                 'streak': streak
@@ -599,267 +640,48 @@ def mark_attendance_api(request):
             
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
 
-def compare_faces_pure_python(registered_b64, scanned_b64):
-    try:
-        if not registered_b64 or not scanned_b64:
-            return False, 999.0
-        
-        if ',' in registered_b64:
-            registered_b64 = registered_b64.split(',')[1]
-        if ',' in scanned_b64:
-            scanned_b64 = scanned_b64.split(',')[1]
-        
-        # Decode and load images
-        img1 = Image.open(BytesIO(base64.b64decode(registered_b64))).convert('L')
-        img2 = Image.open(BytesIO(base64.b64decode(scanned_b64))).convert('L')
-        
-        # Crop the center 70% of both images to focus on the face and exclude backgrounds/borders
-        w1, h1 = img1.size
-        crop_w1, crop_h1 = int(w1 * 0.70), int(h1 * 0.70)
-        left1 = (w1 - crop_w1) // 2
-        top1 = (h1 - crop_h1) // 2
-        img1 = img1.crop((left1, top1, left1 + crop_w1, top1 + crop_h1))
-        
-        w2, h2 = img2.size
-        crop_w2, crop_h2 = int(w2 * 0.70), int(h2 * 0.70)
-        left2 = (w2 - crop_w2) // 2
-        top2 = (h2 - crop_h2) // 2
-        img2 = img2.crop((left2, top2, left2 + crop_w2, top2 + crop_h2))
-        
-        # Normalize contrast and lighting differences
-        img1 = ImageOps.autocontrast(img1)
-        img2 = ImageOps.autocontrast(img2)
-        
-        # Convert to numpy arrays of shape (24, 24)
-        arr1 = np.array(img1.resize((24, 24)), dtype=np.float32)
-        arr2 = np.array(img2.resize((24, 24)), dtype=np.float32)
-        
-        h, w = arr1.shape
-        min_mae = 255.0
-        
-        # Search shifts in dy, dx range of [-3, -2, -1, 0, 1, 2, 3] to align off-centered scans
-        for dy in range(-3, 4):
-            for dx in range(-3, 4):
-                # Bounds for overlapping region
-                y1_start, y1_end = max(0, dy), min(h, h + dy)
-                x1_start, x1_end = max(0, dx), min(w, w + dx)
-                
-                y2_start, y2_end = max(0, -dy), min(h, h - dy)
-                x2_start, x2_end = max(0, -dx), min(w, w - dx)
-                
-                slice1 = arr1[y1_start:y1_end, x1_start:x1_end]
-                slice2 = arr2[y2_start:y2_end, x2_start:x2_end]
-                
-                if slice1.size > 0:
-                    mae = np.mean(np.abs(slice1 - slice2))
-                    if mae < min_mae:
-                        min_mae = mae
-                        
-        # 45.0 is the standard threshold. Shift alignment keeps valid matches well below 40.0.
-        return min_mae < 45.0, min_mae
-    except Exception as e:
-        return False, 999.0
-
 @csrf_exempt
 @login_required
-def verify_face_api(request):
+@role_required('teacher', 'super_admin')
+def toggle_attendance_lock_api(request):
     """
-    API endpoint that verifies a student's face profile.
-    Supports linked QR token verification: if qr_token is passed in request body,
-    directly resolves the student and compares face.
+    API endpoint for Teachers and Admins to submit/lock or unlock attendance for a batch on a date.
     """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            image_data = data.get('image') # Base64 Image string
-            username = data.get('username')
-            qr_token = data.get('qr_token')
-            
-            today = timezone.localdate()
-            matched_profile = None
-            
-            # Scenario 1: Target username or qr_token specified (linked verification), or student on personal device (not 'scanner')
-            if qr_token or username or (request.user.role == 'student' and request.user.username != 'scanner'):
-                profile = None
-                if qr_token:
-                    profile = StudentProfile.objects.filter(
-                        Q(qr_code_token=qr_token) | Q(user__username=qr_token),
-                        user__is_active=True
-                    ).first()
-                elif username:
-                    user_obj = User.objects.filter(username=username).first()
-                    if user_obj:
-                        profile = StudentProfile.objects.filter(user=user_obj).first()
-                elif request.user.role == 'student':
-                    profile = StudentProfile.objects.filter(user=request.user).first()
-                
-                if not profile:
-                    return JsonResponse({'success': False, 'message': 'Student profile not found or inactive.'})
-                
-                # If face_data is not registered, save it (Registration mode) only if teacher/super_admin is registering
-                if not profile.face_data:
-                    if request.user.role in ['teacher', 'super_admin'] and not qr_token:
-                        profile.face_data = image_data
-                        profile.save()
-                        return JsonResponse({
-                            'success': True,
-                            'is_registration': True,
-                            'message': 'Face registered successfully!',
-                            'student_name': profile.user.get_full_name()
-                        })
-                    else:
-                        return JsonResponse({'success': False, 'message': 'Face photo not registered by teacher. Please contact admin.'})
-                
-                # Perform matching
-                match, mae = compare_faces_pure_python(profile.face_data, image_data)
-                if not match:
-                    return JsonResponse({'success': False, 'message': f'Face verification failed (Difference: {mae:.1f}). Please align your face.'})
-                
-                matched_profile = profile
-            else:
-                # Scenario 2: General Attendance Scan (Identify student by matching face database)
-                best_match = None
-                lowest_mae = 999.0
-                
-                profiles = StudentProfile.objects.filter(user__is_active=True).exclude(face_data__isnull=True).exclude(face_data='')
-                for p in profiles:
-                    match, mae = compare_faces_pure_python(p.face_data, image_data)
-                    if match and mae < lowest_mae:
-                        lowest_mae = mae
-                        best_match = p
-                        
-                if not best_match:
-                    return JsonResponse({'success': False, 'message': 'Face not recognized. Please scan your QR code or register.'})
-                
-                matched_profile = best_match
-            
-            # If face matches successfully, update face_data to refine verification with recent scan
-            if matched_profile:
-                matched_profile.face_data = image_data
-                matched_profile.save()
-                if matched_profile.user:
-                    matched_profile.user.face_data = image_data
-                    matched_profile.user.save()
-            
-            # If the scanner is identifying for fees, return details directly without marking attendance
-            if data.get('action') == 'identify':
-                return JsonResponse({
-                    'success': True,
-                    'student_id': matched_profile.id,
-                    'student_name': matched_profile.user.get_full_name(),
-                    'batch': matched_profile.batch.name if matched_profile.batch else 'None',
-                    'monthly_fee': str(matched_profile.monthly_fee),
-                    'recommended_due_date': (matched_profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d'),
-                    'face_data': matched_profile.face_data or ''
-                })
+            batch_id = data.get('batch_id')
+            date_str = data.get('date')
+            lock_state = data.get('is_locked', True)
 
-            # Calculate current month fee status
-            first_of_month = today.replace(day=1)
-            has_paid = FeePayment.objects.filter(
-                student=matched_profile,
-                payment_date__gte=first_of_month,
-                payment_date__lte=today
-            ).exists()
-            fee_status_str = "Paid" if has_paid else "Not Paid"
+            if not batch_id:
+                return JsonResponse({'success': False, 'message': 'Batch ID is required.'})
 
-            # Calculate streak (attendance count this month)
-            streak = AttendanceRecord.objects.filter(
-                student=matched_profile,
-                date__gte=first_of_month,
-                date__lte=today,
-                status__in=['present', 'late']
-            ).count()
+            batch = get_object_or_404(Batch, id=batch_id)
+            lock_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else timezone.localdate()
 
-            # Check if already marked for today
-            existing_record = AttendanceRecord.objects.filter(student=matched_profile, date=today).first()
-            if existing_record:
-                # Calculate running batch attendance percentage
-                batch = matched_profile.batch
-                batch_attendance_percentage = 0
-                if batch:
-                    total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
-                    if total_students > 0:
-                        present_today = AttendanceRecord.objects.filter(
-                            student__batch=batch,
-                            date=today,
-                            status__in=['present', 'late']
-                        ).count()
-                        batch_attendance_percentage = int((present_today / total_students) * 100)
-                        
-                return JsonResponse({
-                    'success': False,
-                    'already_marked': True,
-                    'message': f'{matched_profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today.',
-                    'student_name': matched_profile.user.get_full_name(),
-                    'batch': matched_profile.batch.name if matched_profile.batch else 'None',
-                    'school': matched_profile.school_college,
-                    'fee_status': fee_status_str,
-                    'face_data': matched_profile.face_data or '',
-                    'status': existing_record.status,
-                    'time': existing_record.time_in.strftime('%I:%M %p'),
-                    'batch_attendance_percentage': batch_attendance_percentage,
-                    'next_due': matched_profile.next_due_date.strftime('%d-%m-%Y'),
-                    'streak': streak
-                })
-                
-            # Calculate check-in time and status (present vs late)
-            from django.conf import settings
-            cutoff_str = getattr(settings, 'ATTENDANCE_LATE_CUTOFF', '09:30')
-            try:
-                hour, minute = map(int, cutoff_str.split(':'))
-                cutoff_time = datetime.time(hour, minute)
-            except Exception:
-                cutoff_time = datetime.time(9, 30)
-                
-            current_time = timezone.localtime().time()
-            determined_status = 'late' if current_time > cutoff_time else 'present'
-
-            # Record Attendance
-            record = AttendanceRecord.objects.create(
-                student=matched_profile,
-                date=today,
-                status=determined_status,
-                marked_by='self_face'
+            lock_obj, created = DailyBatchAttendanceLock.objects.get_or_create(
+                batch=batch,
+                date=lock_date,
+                defaults={'is_locked': lock_state, 'locked_by': request.user}
             )
-            
-            # Recalculate streak after marking
-            streak = AttendanceRecord.objects.filter(
-                student=matched_profile,
-                date__gte=first_of_month,
-                date__lte=today,
-                status__in=['present', 'late']
-            ).count()
-            
-            # Calculate running batch attendance percentage
-            batch = matched_profile.batch
-            batch_attendance_percentage = 0
-            if batch:
-                total_students = StudentProfile.objects.filter(batch=batch, user__is_active=True).count()
-                if total_students > 0:
-                    present_today = AttendanceRecord.objects.filter(
-                        student__batch=batch,
-                        date=today,
-                        status__in=['present', 'late']
-                    ).count()
-                    batch_attendance_percentage = int((present_today / total_students) * 100)
-            
+            if not created:
+                lock_obj.is_locked = lock_state
+                lock_obj.locked_by = request.user
+                lock_obj.save()
+
+            status_str = "submitted and locked" if lock_obj.is_locked else "unlocked for editing"
             return JsonResponse({
                 'success': True,
-                'message': 'Face verification successful!',
-                'student_name': matched_profile.user.get_full_name(),
-                'batch': matched_profile.batch.name if matched_profile.batch else 'None',
-                'time': record.time_in.strftime('%I:%M %p'),
-                'school': matched_profile.school_college,
-                'fee_status': fee_status_str,
-                'face_data': matched_profile.face_data or '',
-                'status': record.status,
-                'batch_attendance_percentage': batch_attendance_percentage,
-                'next_due': matched_profile.next_due_date.strftime('%d-%m-%Y'),
-                'streak': streak
+                'is_locked': lock_obj.is_locked,
+                'batch_id': batch.id,
+                'batch_name': batch.name,
+                'date': lock_date.strftime('%Y-%m-%d'),
+                'message': f'Attendance for batch "{batch.name}" on {lock_date.strftime("%d-%m-%Y")} is now {status_str}.'
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
-            
+
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
 
 @login_required
@@ -882,47 +704,12 @@ def get_student_by_qr(request, qr_token):
             'monthly_fee': str(profile.monthly_fee),
             'next_due_date': profile.next_due_date.strftime('%Y-%m-%d'),
             'recommended_due_date': (profile.next_due_date + datetime.timedelta(days=30)).strftime('%Y-%m-%d'),
-            'face_data': profile.face_data or ''
         })
     return JsonResponse({'success': False, 'message': 'Student not found or inactive.'})
-
-@csrf_exempt
-@login_required
-def update_profile_photo_api(request):
-    """
-    Allows any logged-in user (Teacher, Student, Admin) to update their profile photo.
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            image_data = data.get('image')
-            if not image_data:
-                return JsonResponse({'success': False, 'message': 'No image data provided.'})
-            
-            # Save to user account
-            request.user.face_data = image_data
-            request.user.save()
-            
-            # If user is a student, sync to student profile too
-            if request.user.role == 'student':
-                profile = StudentProfile.objects.filter(user=request.user).first()
-                if profile:
-                    profile.face_data = image_data
-                    profile.save()
-                    
-            return JsonResponse({'success': True, 'message': 'Profile photo updated successfully!'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)})
-            
-    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
-
 
 @login_required
 @role_required('teacher', 'super_admin')
 def print_qr_sheet(request, batch_id=None, username=None):
-    """
-    Renders print-optimised list of students with QR codes (3x3 layout).
-    """
     if batch_id:
         batch = get_object_or_404(Batch, id=batch_id)
         students = StudentProfile.objects.filter(batch=batch, user__is_active=True).order_by('user__first_name')
@@ -940,14 +727,9 @@ def print_qr_sheet(request, batch_id=None, username=None):
         'title': title
     })
 
-
 @login_required
 @role_required('teacher', 'super_admin')
 def export_attendance_csv(request):
-    """
-    Exports attendance records for active students as a downloadable CSV.
-    """
-    # Get parameters
     batch_id = request.GET.get('batch')
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
@@ -967,7 +749,7 @@ def export_attendance_csv(request):
     response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate().strftime("%Y-%m-%d")}.csv"'
     
     writer = csv.writer(response)
-    writer.writerow(['Date', 'Student ID (Username)', 'Student Name', 'Batch', 'Check-In Time', 'Status', 'Marked By'])
+    writer.writerow(['Date', 'Student ID (Username)', 'Student Name', 'Batch', 'Check-In Time', 'Status', 'Minutes Late', 'Marked By'])
     
     for r in records:
         writer.writerow([
@@ -977,18 +759,14 @@ def export_attendance_csv(request):
             r.student.batch.name if r.student.batch else 'None',
             r.time_in.strftime('%I:%M %p') if r.time_in else '-',
             r.get_status_display(),
+            r.minutes_late,
             r.get_marked_by_display()
         ])
         
     return response
 
-
 @csrf_exempt
 def public_student_info(request):
-    """
-    Public API endpoint to view student details (Next Due and Streak) via QR code token,
-    WITHOUT requiring authentication. Fee amount is excluded.
-    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -1020,7 +798,6 @@ def public_student_info(request):
                 'school': profile.school_college,
                 'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
                 'streak': streak,
-                'face_data': profile.face_data or ''
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
