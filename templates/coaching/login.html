@@ -54,27 +54,36 @@
 </div>
 
 <!-- Public Info Detail Modal -->
-<div class="modal-overlay" id="publicDetailModal" style="display: none; z-index: 2001; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95);">
-    <div class="modal-premium" style="max-width: 400px; width: 90%; text-align: center; border: 2px solid var(--accent-indigo); padding: 24px; position: relative;">
+<div class="modal-overlay" id="publicDetailModal" style="display: none; z-index: 2001; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92);">
+    <div class="modal-premium" style="max-width: 420px; width: 90%; text-align: center; border: 2px solid var(--accent-indigo); padding: 24px; position: relative;">
         <button class="modal-close" onclick="closePublicDetail()" style="background: none; border: none; color: #fff; font-size: 1.5rem; position: absolute; right: 15px; top: 10px; cursor: pointer;">&times;</button>
         
-        <h3 style="color: var(--accent-emerald); font-size: 1.35rem; margin-bottom: 16px;">
-            <i class="fa-solid fa-circle-info"></i> Student Account File
+        <h3 style="color: var(--accent-emerald); font-size: 1.35rem; margin-bottom: 14px;">
+            <i class="fa-solid fa-circle-info"></i> Student Info Card
         </h3>
         
         <!-- Photo Container -->
-        <div style="width: 110px; height: 135px; border-radius: 12px; overflow: hidden; border: 2px solid var(--accent-indigo); margin: 0 auto 20px; background-color: var(--bg-secondary); display: flex; align-items: center; justify-content: center;">
+        <div style="width: 90px; height: 90px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent-indigo); margin: 0 auto 14px; background-color: var(--bg-secondary); display: flex; align-items: center; justify-content: center;">
             <img id="pubStudentPhoto" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-            <i class="fa-solid fa-user" id="pubPhotoPlaceholder" style="font-size: 2.5rem; color: var(--text-secondary);"></i>
+            <i class="fa-solid fa-user" id="pubPhotoPlaceholder" style="font-size: 2.2rem; color: var(--text-secondary);"></i>
+        </div>
+
+        <!-- Fee Reminder Notification Box -->
+        <div id="pubFeeReminderContainer" style="display: none; margin-bottom: 14px; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 10px; text-align: left; font-size: 0.85rem; color: #f87171; font-weight: 500;">
+            <span id="pubFeeReminderText">--</span>
         </div>
         
-        <div style="font-size: 1rem; line-height: 1.5; margin-bottom: 20px; text-align: left; background-color: rgba(255, 255, 255, 0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px; text-align: left; background-color: rgba(255, 255, 255, 0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Name:</span>
                 <strong style="color: var(--text-primary);" id="pubStudentName">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Class:</span>
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Class/Std:</span>
+                <strong style="color: var(--text-primary);" id="pubStudentClass">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Batch:</span>
                 <strong style="color: var(--text-primary);" id="pubStudentBatch">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
@@ -86,9 +95,22 @@
                 <strong style="color: var(--text-primary);" id="pubNextDue">--/--/----</strong>
             </div>
             <div style="display: flex; justify-content: space-between; padding-top: 4px;">
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Streak (This Month):</span>
-                <strong style="color: var(--accent-indigo);" id="pubStreak">0 classes</strong>
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Fee Status:</span>
+                <span id="pubFeeStatusBadge" class="badge">Paid</span>
             </div>
+        </div>
+
+        <!-- Teacher Tip / Assignment Note Read-Aloud Box -->
+        <div id="pubDailyNoteContainer" style="display: none; margin-bottom: 16px; padding: 14px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 12px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent-indigo);">
+                    <i class="fa-solid fa-bullhorn" style="margin-right: 6px;"></i> Assigned HW / Announcement
+                </span>
+                <button type="button" onclick="speakPublicNote()" id="pubSpeechBtn" class="btn-premium" style="padding: 4px 10px; font-size: 0.75rem; background: var(--accent-indigo);">
+                    <i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud
+                </button>
+            </div>
+            <div style="font-size: 0.9rem; color: var(--text-primary); font-weight: 500;" id="pubDailyNote">--</div>
         </div>
         
         <button class="btn-premium" onclick="closePublicDetail()" style="width: 100%;">
@@ -103,6 +125,42 @@
 <script>
     let publicQrCode = null;
     let isPubProcessing = false;
+    let pubNoteText = "";
+
+    function speakPublicNote() {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+
+        if (!pubNoteText || pubNoteText.trim() === '') return;
+        const utterance = new SpeechSynthesisUtterance(pubNoteText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        
+        const btn = document.getElementById('pubSpeechBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-wave-square" style="margin-right: 4px;"></i> Reading...';
+        }
+        
+        utterance.onend = function() {
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud';
+            }
+        };
+
+        utterance.onerror = function() {
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud';
+            }
+        };
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function stopPublicSpeech() {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+    }
     
     function playPublicBeep() {
         try {
@@ -182,21 +240,47 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                document.getElementById("pubStudentName").innerText = data.student_name;
-                document.getElementById("pubStudentBatch").innerText = data.batch;
-                document.getElementById("pubStudentSchool").innerText = data.school;
-                document.getElementById("pubNextDue").innerText = data.next_due;
-                document.getElementById("pubStreak").innerText = data.streak + " classes";
+                document.getElementById("pubStudentName").innerText = data.student_name || "--";
+                document.getElementById("pubStudentClass").innerText = data.class_std || "N/A";
+                document.getElementById("pubStudentBatch").innerText = data.batch || "--";
+                document.getElementById("pubStudentSchool").innerText = data.school || "--";
+                document.getElementById("pubNextDue").innerText = data.next_due || "--/--/----";
+                
+                const badgeEl = document.getElementById("pubFeeStatusBadge");
+                const feeStatus = data.fee_status || "Not Paid";
+                badgeEl.innerText = feeStatus;
+                badgeEl.className = feeStatus === "Paid" ? "badge badge-success" : "badge badge-danger";
                 
                 const photoImg = document.getElementById("pubStudentPhoto");
                 const placeholder = document.getElementById("pubPhotoPlaceholder");
-                if (data.face_data) {
+                if (data.face_data && data.face_data.length > 20) {
                     photoImg.src = data.face_data;
                     photoImg.style.display = "block";
                     placeholder.style.display = "none";
                 } else {
                     photoImg.style.display = "none";
                     placeholder.style.display = "block";
+                }
+
+                // Fee Reminder Banner
+                const reminderContainer = document.getElementById("pubFeeReminderContainer");
+                if (data.fee_reminder_msg) {
+                    document.getElementById("pubFeeReminderText").innerText = data.fee_reminder_msg;
+                    reminderContainer.style.display = "block";
+                } else {
+                    reminderContainer.style.display = "none";
+                }
+
+                // Voice Read-Aloud Assignment Note
+                pubNoteText = data.daily_note || "";
+                const noteContainer = document.getElementById("pubDailyNoteContainer");
+                if (pubNoteText && pubNoteText.trim() !== "") {
+                    document.getElementById("pubDailyNote").innerText = pubNoteText;
+                    noteContainer.style.display = "block";
+                    speakPublicNote();
+                } else {
+                    noteContainer.style.display = "none";
+                    stopPublicSpeech();
                 }
                 
                 document.getElementById("publicDetailModal").style.display = "flex";
@@ -206,6 +290,7 @@
             }
         })
         .catch(err => {
+            console.error(err);
             alert("Network connection error.");
             isPubProcessing = false;
         });
@@ -214,6 +299,7 @@
     function onPublicQrError(err) {}
     
     function closePublicDetail() {
+        stopPublicSpeech();
         document.getElementById("publicDetailModal").style.display = "none";
         isPubProcessing = false;
     }

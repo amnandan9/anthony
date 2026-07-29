@@ -36,9 +36,16 @@ ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()] or [
 CSRF_TRUSTED_ORIGINS = [
     'https://anthonycoaching.pythonanywhere.com',
     'https://*.pythonanywhere.com',
+    'http://anthonycoaching.pythonanywhere.com',
+    'http://*.pythonanywhere.com',
     'http://127.0.0.1:8000',
     'http://localhost:8000',
 ]
+
+# Mobile CSRF & Session Cookie Compatibility Settings
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = False
 
 
 # ---------------------------------------------------------------------------
