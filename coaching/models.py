@@ -70,6 +70,7 @@ class StudentProfile(models.Model):
     next_due_date = models.DateField()
     qr_code_token = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
     face_data = models.TextField(blank=True, null=True, help_text="Deprecated photo data")
+    individual_note = models.TextField(blank=True, null=True, help_text="Individual homework or custom task assigned to this student")
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username

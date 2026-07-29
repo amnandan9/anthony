@@ -142,6 +142,7 @@
                         <th>Batch</th>
                         <th>Today's Attendance</th>
                         <th>Fee Status</th>
+                        <th>Assigned HW / Task</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -188,6 +189,14 @@
                             {% endif %}
                         </td>
                         <td>
+                            <div style="display: flex; gap: 4px; align-items: center; min-width: 170px;">
+                                <input type="text" id="student-note-{{ student.id }}" class="form-control" style="font-size: 0.75rem; padding: 4px 8px; flex: 1;" placeholder="Individual HW task..." value="{{ student.individual_note|default:'' }}">
+                                <button onclick="saveStudentNote({{ student.id }})" class="btn-premium btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; flex-shrink: 0;" title="Save task">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td>
                             <a href="{% url 'student_detail' student_id=student.id %}" class="btn-premium btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
                                 View File
                             </a>
@@ -195,7 +204,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">No students match the criteria.</td>
+                        <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">No students match the criteria.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -394,10 +403,25 @@
                 dotsEl.appendChild(dot);
             }
             if (hasDue) {
-                const dot = document.createElement('div');
-                dot.className = 'dot dot-due';
-                dot.title = "Fee Due: " + dayDues.map(d => d.name).join(', ');
-                dotsEl.appendChild(dot);
+                dayDues.forEach(due => {
+                    const dueBadge = document.createElement('div');
+                    dueBadge.style.fontSize = '0.65rem';
+                    dueBadge.style.fontWeight = '600';
+                    dueBadge.style.lineHeight = '1.2';
+                    dueBadge.style.padding = '2px 4px';
+                    dueBadge.style.marginTop = '2px';
+                    dueBadge.style.borderRadius = '4px';
+                    dueBadge.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                    dueBadge.style.color = '#f87171';
+                    dueBadge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                    dueBadge.style.whiteSpace = 'nowrap';
+                    dueBadge.style.overflow = 'hidden';
+                    dueBadge.style.textOverflow = 'ellipsis';
+                    dueBadge.style.maxWidth = '100%';
+                    dueBadge.innerHTML = `<i class="fa-solid fa-coins" style="font-size:0.6rem; margin-right:2px;"></i> ${due.name}`;
+                    dueBadge.title = `Fee Due: ${due.name}`;
+                    dotsEl.appendChild(dueBadge);
+                });
             }
             
             dayEl.appendChild(dotsEl);
@@ -506,6 +530,35 @@
             body: JSON.stringify({
                 batch_id: batchId,
                 daily_note: noteText
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert(data.message || 'Save failed.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Server communication error.');
+        });
+    }
+
+    function saveStudentNote(studentId) {
+        const noteInput = document.getElementById(`student-note-${studentId}`);
+        const noteText = noteInput ? noteInput.value : '';
+
+        fetch("{% url 'save_student_note_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                individual_note: noteText
             })
         })
         .then(res => res.json())

@@ -40,6 +40,19 @@
             <div class="qr-display-card" id="qrcode" title="Scan to record attendance or fee"></div>
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">Token: {{ profile.qr_code_token }}</p>
             
+            <!-- Assigned Individual Task Box -->
+            <div style="width: 100%; margin-top: 16px; padding: 14px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; text-align: left;">
+                <label style="font-size: 0.8rem; font-weight: bold; color: var(--accent-indigo); display: block; margin-bottom: 6px;">
+                    <i class="fa-solid fa-book-open" style="margin-right: 4px;"></i> Individual Homework / Task Note
+                </label>
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="detail-student-note" class="form-control" style="font-size: 0.8rem; padding: 6px 10px; flex: 1;" placeholder="Assign custom task for scan read-aloud..." value="{{ profile.individual_note|default:'' }}">
+                    <button onclick="saveDetailStudentNote({{ profile.id }})" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; flex-shrink: 0;">
+                        Save
+                    </button>
+                </div>
+            </div>
+
             <div style="margin-top: 24px; display: flex; gap: 12px; width: 100%;">
                 <a href="{% url 'edit_student' student_id=profile.id %}" class="btn-premium btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 12px;">
                     <i class="fa-solid fa-user-pen" style="margin-right: 6px;"></i> Edit File
@@ -321,6 +334,35 @@
         if (event.target == feeModal) {
             closeFeeModal();
         }
+    }
+
+    function saveDetailStudentNote(studentId) {
+        const noteInput = document.getElementById('detail-student-note');
+        const noteText = noteInput ? noteInput.value : '';
+
+        fetch("{% url 'save_student_note_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                individual_note: noteText
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert(data.message || 'Save failed.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Server communication error.');
+        });
     }
 </script>
 {% endblock %}

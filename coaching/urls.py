@@ -44,6 +44,7 @@ urlpatterns = [
     path('api/toggle-student-attendance/', views.toggle_student_attendance_api, name='toggle_student_attendance_api'),
     path('api/update-profile-photo/', views.update_profile_photo_api, name='update_profile_photo_api'),
     path('api/save-batch-note/', views.save_batch_note_api, name='save_batch_note_api'),
+    path('api/save-student-note/', views.save_student_note_api, name='save_student_note_api'),
     path('api/get-student-qr/<str:qr_token>/', views.get_student_by_qr, name='get_student_by_qr'),
     path('api/public-student-info/', views.public_student_info, name='public_student_info'),
 ]

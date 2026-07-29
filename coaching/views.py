@@ -561,6 +561,12 @@ def mark_attendance_api(request):
             else:
                 timing_summary = f"{minutes_late} mins late (Present)"
             
+            effective_note = ""
+            if profile.individual_note and profile.individual_note.strip():
+                effective_note = profile.individual_note.strip()
+            elif profile.batch and profile.batch.daily_note and profile.batch.daily_note.strip():
+                effective_note = profile.batch.daily_note.strip()
+
             # Check if already marked for today
             existing_record = AttendanceRecord.objects.filter(student=profile, date=today).first()
             if existing_record:
@@ -582,7 +588,7 @@ def mark_attendance_api(request):
                     'message': f'{profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today ({existing_record.minutes_late} mins late).',
                     'student_name': profile.user.get_full_name(),
                     'batch': profile.batch.name if profile.batch else 'None',
-                    'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
+                    'daily_note': effective_note,
                     'school': profile.school_college,
                     'fee_status': fee_status_str,
                     'status': existing_record.status,
@@ -620,7 +626,7 @@ def mark_attendance_api(request):
                 'message': 'Attendance marked successfully!',
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
-                'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
+                'daily_note': effective_note,
                 'time': record.time_in.strftime('%I:%M %p'),
                 'school': profile.school_college,
                 'fee_status': fee_status_str,
@@ -874,11 +880,17 @@ def public_student_info(request):
             if not profile:
                 return JsonResponse({'success': False, 'message': 'Student profile not found.'})
             
+            effective_note = ""
+            if profile.individual_note and profile.individual_note.strip():
+                effective_note = profile.individual_note.strip()
+            elif profile.batch and profile.batch.daily_note and profile.batch.daily_note.strip():
+                effective_note = profile.batch.daily_note.strip()
+
             return JsonResponse({
                 'success': True,
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
-                'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
+                'daily_note': effective_note,
                 'school': profile.school_college,
                 'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
             })
@@ -923,6 +935,28 @@ def save_batch_note_api(request):
             batch.save()
             
             return JsonResponse({'success': True, 'message': f'Assignment note for "{batch.name}" saved successfully!'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'}, status=405)
+
+@csrf_exempt
+@login_required
+@role_required('teacher', 'super_admin')
+def save_student_note_api(request):
+    """
+    API endpoint for teachers and admins to save an individual homework/task note for a student.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            student_id = data.get('student_id')
+            individual_note = data.get('individual_note', '')
+            
+            profile = get_object_or_404(StudentProfile, id=student_id)
+            profile.individual_note = individual_note
+            profile.save()
+            
+            return JsonResponse({'success': True, 'message': f'Individual task for {profile.user.get_full_name()} saved successfully!'})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'}, status=405)
