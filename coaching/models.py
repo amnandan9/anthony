@@ -71,6 +71,8 @@ class StudentProfile(models.Model):
     qr_code_token = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
     face_data = models.TextField(blank=True, null=True, help_text="Deprecated photo data")
     individual_note = models.TextField(blank=True, null=True, help_text="Individual homework or custom task assigned to this student")
+    last_scanned_ip = models.GenericIPAddressField(blank=True, null=True, help_text="IP address of device used to scan QR info")
+    last_scanned_at = models.DateTimeField(blank=True, null=True, help_text="Last QR info scan timestamp")
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username

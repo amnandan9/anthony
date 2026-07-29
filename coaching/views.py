@@ -880,19 +880,56 @@ def public_student_info(request):
             if not profile:
                 return JsonResponse({'success': False, 'message': 'Student profile not found.'})
             
+            # Save device IP tracking
+            x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded:
+                client_ip = x_forwarded.split(',')[0].strip()
+            else:
+                client_ip = request.META.get('REMOTE_ADDR')
+            
+            profile.last_scanned_ip = client_ip
+            profile.last_scanned_at = timezone.now()
+            profile.save(update_fields=['last_scanned_ip', 'last_scanned_at'])
+
+            # Determine fee payment status & notifications
+            today = timezone.localdate()
+            has_paid = FeePayment.objects.filter(
+                student=profile,
+                payment_date__gte=today.replace(day=1),
+                payment_date__lte=today
+            ).exists()
+            fee_status_str = "Paid" if has_paid else "Not Paid"
+
+            fee_reminder_msg = ""
+            if not has_paid:
+                if profile.next_due_date < today:
+                    fee_reminder_msg = f"⚠️ FEE REMINDER: Payment is OVERDUE since {profile.next_due_date.strftime('%d-%m-%Y')}. Please submit your fee."
+                else:
+                    days_left = (profile.next_due_date - today).days
+                    if days_left <= 7:
+                        fee_reminder_msg = f"🔔 FEE REMINDER: Next fee due date is {profile.next_due_date.strftime('%d-%m-%Y')} ({days_left} days remaining)."
+
             effective_note = ""
             if profile.individual_note and profile.individual_note.strip():
                 effective_note = profile.individual_note.strip()
             elif profile.batch and profile.batch.daily_note and profile.batch.daily_note.strip():
                 effective_note = profile.batch.daily_note.strip()
 
+            face_data = profile.face_data or profile.user.face_data or ""
+
             return JsonResponse({
                 'success': True,
                 'student_name': profile.user.get_full_name(),
+                'username': profile.user.username,
                 'batch': profile.batch.name if profile.batch else 'None',
                 'daily_note': effective_note,
                 'school': profile.school_college,
+                'class_std': profile.class_std or 'N/A',
+                'face_data': face_data,
+                'fee_status': fee_status_str,
+                'fee_reminder_msg': fee_reminder_msg,
                 'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
+                'scanned_ip': client_ip,
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})

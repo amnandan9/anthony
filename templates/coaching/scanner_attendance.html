@@ -72,9 +72,19 @@
     <div class="modal-premium" style="max-width: 420px; text-align: center; border: 2px solid var(--accent-indigo); padding: 32px 24px;">
         <button class="modal-close" onclick="closeAttendanceSuccessModal()">&times;</button>
         
-        <h2 style="color: var(--accent-emerald); font-size: 1.4rem; margin-bottom: 20px;" id="popupHeader">
+        <h2 style="color: var(--accent-emerald); font-size: 1.4rem; margin-bottom: 16px;" id="popupHeader">
             <i class="fa-solid fa-circle-check"></i> Present Marked!
         </h2>
+
+        <!-- Student Photo Avatar Header -->
+        <div id="popupAvatarContainer" style="display: flex; justify-content: center; margin-bottom: 14px;">
+            <img id="popupStudentAvatar" style="width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-indigo); display: none;">
+        </div>
+
+        <!-- Fee Reminder Notification Box -->
+        <div id="popupFeeReminderContainer" style="display: none; margin-bottom: 14px; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 10px; text-align: left; font-size: 0.85rem; color: #f87171; font-weight: 500;">
+            <span id="popupFeeReminderText">--</span>
+        </div>
         
         <div style="font-size: 1.05rem; line-height: 1.6; margin-bottom: 24px; text-align: left; background-color: rgba(255, 255, 255, 0.02); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
@@ -336,6 +346,24 @@
         const feeStatus = data.fee_status || "Not Paid";
         badgeEl.innerText = feeStatus;
         badgeEl.className = feeStatus === "Paid" ? "badge badge-success" : "badge badge-danger";
+
+        // Student Avatar Photo
+        const avatarImg = document.getElementById('popupStudentAvatar');
+        if (data.face_data && data.face_data.length > 20) {
+            avatarImg.src = data.face_data;
+            avatarImg.style.display = 'block';
+        } else {
+            avatarImg.style.display = 'none';
+        }
+
+        // Fee Reminder Notification Box
+        const reminderContainer = document.getElementById('popupFeeReminderContainer');
+        if (data.fee_reminder_msg) {
+            document.getElementById('popupFeeReminderText').innerText = data.fee_reminder_msg;
+            reminderContainer.style.display = 'block';
+        } else {
+            reminderContainer.style.display = 'none';
+        }
 
         // Read aloud teacher note if present
         currentNoteText = data.daily_note || "";

@@ -107,7 +107,7 @@
         </div>
         
         <!-- Filters Form -->
-        <form method="get" action="{% url 'teacher_dashboard' %}" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; margin-bottom: 24px; align-items: end;">
+        <form method="get" action="{% url 'teacher_dashboard' %}" class="filters-grid">
             <div>
                 <label for="q" class="form-label" style="font-size: 0.8rem;">Search Name / College</label>
                 <input type="text" name="q" id="q" class="form-control" style="padding: 8px 12px;" placeholder="Search..." value="{{ search_query }}">
