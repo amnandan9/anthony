@@ -582,6 +582,7 @@ def mark_attendance_api(request):
                     'message': f'{profile.user.get_full_name()} is already marked {existing_record.get_status_display().lower()} for today ({existing_record.minutes_late} mins late).',
                     'student_name': profile.user.get_full_name(),
                     'batch': profile.batch.name if profile.batch else 'None',
+                    'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
                     'school': profile.school_college,
                     'fee_status': fee_status_str,
                     'status': existing_record.status,
@@ -589,8 +590,7 @@ def mark_attendance_api(request):
                     'timing_summary': f"{existing_record.minutes_late} mins late" if existing_record.minutes_late > 0 else "On time",
                     'time': existing_record.time_in.strftime('%I:%M %p'),
                     'batch_attendance_percentage': batch_attendance_percentage,
-                    'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
-                    'streak': streak
+                    'next_due': profile.next_due_date.strftime('%d-%m-%Y')
                 })
                 
             # Create Attendance Record
@@ -601,14 +601,6 @@ def mark_attendance_api(request):
                 minutes_late=minutes_late,
                 marked_by=marked_by_type
             )
-            
-            # Recalculate streak after marking
-            streak = AttendanceRecord.objects.filter(
-                student=profile,
-                date__gte=first_of_month,
-                date__lte=today,
-                status__in=['present', 'late']
-            ).count()
             
             # Calculate running batch attendance percentage
             batch = profile.batch
@@ -628,6 +620,7 @@ def mark_attendance_api(request):
                 'message': 'Attendance marked successfully!',
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
+                'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
                 'time': record.time_in.strftime('%I:%M %p'),
                 'school': profile.school_college,
                 'fee_status': fee_status_str,
@@ -635,8 +628,7 @@ def mark_attendance_api(request):
                 'minutes_late': record.minutes_late,
                 'timing_summary': timing_summary,
                 'batch_attendance_percentage': batch_attendance_percentage,
-                'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
-                'streak': streak
+                'next_due': profile.next_due_date.strftime('%d-%m-%Y')
             })
             
         except Exception as e:
@@ -882,25 +874,58 @@ def public_student_info(request):
             if not profile:
                 return JsonResponse({'success': False, 'message': 'Student profile not found.'})
             
-            today = timezone.localdate()
-            first_of_month = today.replace(day=1)
-            streak = AttendanceRecord.objects.filter(
-                student=profile,
-                date__gte=first_of_month,
-                date__lte=today,
-                status__in=['present', 'late']
-            ).count()
-            
             return JsonResponse({
                 'success': True,
                 'student_name': profile.user.get_full_name(),
                 'batch': profile.batch.name if profile.batch else 'None',
+                'daily_note': profile.batch.daily_note if (profile.batch and profile.batch.daily_note) else '',
                 'school': profile.school_college,
                 'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
-                'streak': streak,
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
+
+@csrf_exempt
+@login_required
+def update_profile_photo_api(request):
+    """
+    API endpoint for logged-in users (teachers, admins) to update their profile photo from gallery.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            image_data = data.get('image')
+            if not image_data:
+                return JsonResponse({'success': False, 'message': 'No image data provided.'}, status=400)
+                
+            request.user.face_data = image_data
+            request.user.save()
+            return JsonResponse({'success': True, 'message': 'Profile photo updated successfully!'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'}, status=405)
+
+@csrf_exempt
+@login_required
+@role_required('teacher', 'super_admin')
+def save_batch_note_api(request):
+    """
+    API endpoint for teachers and admins to save a daily assignment note/teacher tip for a batch.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            batch_id = data.get('batch_id')
+            daily_note = data.get('daily_note', '')
+            
+            batch = get_object_or_404(Batch, id=batch_id)
+            batch.daily_note = daily_note
+            batch.save()
+            
+            return JsonResponse({'success': True, 'message': f'Assignment note for "{batch.name}" saved successfully!'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'}, status=405)
             
     return JsonResponse({'success': False, 'message': 'Invalid HTTP Method.'})
 

@@ -78,11 +78,15 @@
             </a>
         </div>
         <div style="padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); background-color: rgba(0,0,0,0.15);">
-            <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); flex-shrink: 0; background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center;">
-                <i class="fa-solid fa-user-gear" style="font-size: 1.2rem; color: var(--text-secondary);"></i>
+            <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); cursor: pointer; flex-shrink: 0; background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center;" onclick="openProfilePhotoModal()" title="Click to upload profile photo">
+                {% if user.face_data %}
+                    <img id="sidebarUserPhoto" src="{{ user.face_data }}" style="width: 100%; height: 100%; object-fit: cover;">
+                {% else %}
+                    <i class="fa-solid fa-user-gear" style="font-size: 1.2rem; color: var(--text-secondary);"></i>
+                {% endif %}
             </div>
             <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">{{ user.get_full_name|default:user.username }}</div>
+                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="openProfilePhotoModal()">{{ user.get_full_name|default:user.username }}</div>
                 <div style="font-size: 0.7rem; color: var(--accent-indigo); text-transform: uppercase;">{{ user.get_role_display|default:user.role }}</div>
             </div>
         </div>
@@ -174,6 +178,93 @@
         {% block auth_content %}{% endblock %}
     {% endif %}
 
+    <!-- Profile Photo Upload Modal (Gallery Upload) -->
+    <div class="modal-overlay" id="profilePhotoModal" style="z-index: 2000;">
+        <div class="modal-premium" style="max-width: 420px; text-align: center;">
+            <button class="modal-close" onclick="closeProfilePhotoModal()">&times;</button>
+            <h3 class="modal-title">Upload Profile Photo</h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">Select a profile picture from your gallery or files.</p>
+            
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div style="width: 140px; height: 140px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-indigo); background-color: var(--bg-primary); display: flex; align-items: center; justify-content: center; position: relative;">
+                    {% if user.face_data %}
+                        <img id="profModalPreview" src="{{ user.face_data }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    {% else %}
+                        <img id="profModalPreview" style="display:none; width: 100%; height: 100%; object-fit: cover;">
+                        <i class="fa-solid fa-user-gear" id="profModalIcon" style="font-size: 3rem; color: var(--text-secondary);"></i>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('userProfFileInput').click()" style="font-size: 0.85rem; padding: 8px 16px;">
+                        <i class="fa-solid fa-image" style="margin-right: 6px;"></i> Choose Photo from Gallery
+                    </button>
+                    <input type="file" accept="image/*" id="userProfFileInput" style="display: none;" onchange="handleUserProfFile(this)">
+                </div>
+            </div>
+            
+            <button type="button" class="btn-premium" onclick="saveUserProfPhoto()" style="width: 100%;">
+                Save Profile Photo
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let base64UserPhoto = null;
+
+        function openProfilePhotoModal() {
+            const m = document.getElementById('profilePhotoModal');
+            if (m) m.style.display = 'flex';
+        }
+
+        function closeProfilePhotoModal() {
+            const m = document.getElementById('profilePhotoModal');
+            if (m) m.style.display = 'none';
+        }
+
+        function handleUserProfFile(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    base64UserPhoto = e.target.result;
+                    const img = document.getElementById('profModalPreview');
+                    img.src = base64UserPhoto;
+                    img.style.display = 'block';
+                    const icon = document.getElementById('profModalIcon');
+                    if (icon) icon.style.display = 'none';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function saveUserProfPhoto() {
+            if (!base64UserPhoto) {
+                alert("Please select a photo from gallery first.");
+                return;
+            }
+            fetch("{% url 'update_profile_photo_api' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ image: base64UserPhoto })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Server communication error.");
+            });
+        }
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

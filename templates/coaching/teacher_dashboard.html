@@ -63,6 +63,18 @@
                         </span>
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 6px;">Start Time: {{ batch.get_effective_start_time|time:"h:i A" }}</div>
+                    
+                    <div style="margin-top: 10px;">
+                        <label style="font-size: 0.75rem; color: var(--accent-indigo); display: block; margin-bottom: 4px;">
+                            <i class="fa-solid fa-bullhorn" style="margin-right: 4px;"></i> Teacher Tip / Assignment (Scan Read-Aloud)
+                        </label>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="batch-note-{{ batch.id }}" class="form-control" style="font-size: 0.8rem; padding: 6px 10px;" placeholder="e.g. Complete Ex 4.2 Q1-5 today!" value="{{ batch.daily_note|default:'' }}">
+                            <button onclick="saveBatchNote({{ batch.id }})" class="btn-premium btn-secondary" style="padding: 6px 10px; font-size: 0.8rem; flex-shrink: 0;" title="Save note">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div style="margin-top: 14px;">
                     <button onclick="toggleBatchLock({{ batch.id }}, '{{ today|date:'Y-m-d' }}')" id="lock-btn-{{ batch.id }}" class="btn-premium {% if batch.is_locked_today %}btn-secondary{% endif %}" style="width: 100%; padding: 8px 12px; font-size: 0.8rem;">
@@ -473,6 +485,35 @@
                 location.reload();
             } else {
                 alert(data.message || 'Action failed.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Server communication error.');
+        });
+    }
+
+    function saveBatchNote(batchId) {
+        const noteInput = document.getElementById(`batch-note-${batchId}`);
+        const noteText = noteInput ? noteInput.value : '';
+
+        fetch("{% url 'save_batch_note_api' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                batch_id: batchId,
+                daily_note: noteText
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert(data.message || 'Save failed.');
             }
         })
         .catch(err => {

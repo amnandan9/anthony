@@ -26,6 +26,7 @@ class Batch(models.Model):
     description = models.TextField(blank=True)
     timing = models.CharField(max_length=100, help_text="e.g. Mon-Wed-Fri 7:15 PM - 8:15 PM")
     start_time = models.TimeField(default='09:00:00', help_text="Batch start time (e.g. 19:15 for 7:15 PM)")
+    daily_note = models.TextField(blank=True, null=True, help_text="Daily teacher tip, assignment, or announcement for the batch")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

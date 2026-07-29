@@ -102,16 +102,25 @@
                 <strong style="color: var(--text-primary);" id="popupNextDue">--/--/----</strong>
             </div>
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
-                <span style="color: var(--text-secondary); font-size: 0.9rem;">Streak (This Month):</span>
-                <strong style="color: var(--accent-indigo);" id="popupStreak">0</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
                 <span style="color: var(--text-secondary); font-size: 0.9rem;">Batch Attendance Today:</span>
                 <strong style="color: var(--accent-indigo);" id="popupBatchAttendance">0%</strong>
             </div>
             <div style="display: flex; justify-content: space-between; padding-top: 4px;">
                 <span style="color: var(--text-secondary); font-size: 0.9rem;">Fee Status:</span>
                 <span id="popupFeeStatusBadge" class="badge">Paid</span>
+            </div>
+            
+            <!-- Teacher Tip / Assignment Note Read-Aloud Box -->
+            <div id="popupDailyNoteContainer" style="display: none; margin-top: 16px; padding: 14px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 12px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent-indigo);">
+                        <i class="fa-solid fa-bullhorn" style="margin-right: 6px;"></i> Teacher's Note / Assignment
+                    </span>
+                    <button type="button" onclick="speakCurrentNote()" id="speechBtn" class="btn-premium" style="padding: 4px 10px; font-size: 0.75rem; background: var(--accent-indigo);">
+                        <i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud
+                    </button>
+                </div>
+                <div style="font-size: 0.9rem; color: var(--text-primary); font-weight: 500;" id="popupDailyNote">--</div>
             </div>
         </div>
         
@@ -130,9 +139,45 @@
     let isProcessing = false;
     let currentFacingMode = "user";
     let modalTimeout = null;
+    let currentNoteText = "";
 
     const scanStatus = document.getElementById('scanStatus');
     const qrReaderDiv = document.getElementById('qrReader');
+
+    function speakCurrentNote() {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+
+        if (!currentNoteText || currentNoteText.trim() === '') return;
+        const utterance = new SpeechSynthesisUtterance(currentNoteText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        
+        const btn = document.getElementById('speechBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-wave-square" style="margin-right: 4px;"></i> Reading...';
+        }
+        
+        utterance.onend = function() {
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud';
+            }
+        };
+
+        utterance.onerror = function() {
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-volume-high" style="margin-right: 4px;"></i> Read Aloud';
+            }
+        };
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeech() {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+    }
 
     function playBeep() {
         try {
@@ -285,7 +330,6 @@
         document.getElementById('popupCheckinTime').innerText = data.time || "--:--";
         document.getElementById('popupTimingSummary').innerText = data.timing_summary || (data.minutes_late ? `${data.minutes_late} mins late` : "On time");
         document.getElementById('popupNextDue').innerText = data.next_due || "--/--/----";
-        document.getElementById('popupStreak').innerText = data.streak ?? "0";
         document.getElementById('popupBatchAttendance').innerText = (data.batch_attendance_percentage ?? 0) + '%';
         
         const badgeEl = document.getElementById('popupFeeStatusBadge');
@@ -293,11 +337,26 @@
         badgeEl.innerText = feeStatus;
         badgeEl.className = feeStatus === "Paid" ? "badge badge-success" : "badge badge-danger";
 
+        // Read aloud teacher note if present
+        currentNoteText = data.daily_note || "";
+        const noteContainer = document.getElementById('popupDailyNoteContainer');
+        const noteEl = document.getElementById('popupDailyNote');
+
+        if (currentNoteText && currentNoteText.trim() !== '') {
+            noteEl.innerText = currentNoteText;
+            noteContainer.style.display = 'block';
+            speakCurrentNote();
+        } else {
+            noteContainer.style.display = 'none';
+            stopSpeech();
+        }
+
         attendanceSuccessModal.style.display = 'flex';
         modalTimeout = setTimeout(closeAttendanceSuccessModal, 15000);
     }
 
     function closeAttendanceSuccessModal() {
+        stopSpeech();
         if (modalTimeout) {
             clearTimeout(modalTimeout);
             modalTimeout = null;
