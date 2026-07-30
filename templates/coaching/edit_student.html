@@ -7,7 +7,7 @@
 <div class="card-premium" style="max-width: 800px; margin: 0 auto;">
     <h2 style="margin-bottom: 24px;">Update Student File: {{ profile.user.get_full_name }}</h2>
     
-    <form method="post" action="{% url 'edit_student' student_id=profile.id %}">
+    <form method="post" action="{% url 'edit_student' student_id=profile.id %}" enctype="multipart/form-data">
         {% csrf_token %}
         
         <h4 style="color: var(--accent-indigo); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">1. User Credentials</h4>
@@ -85,7 +85,7 @@
                     <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('galleryFileInput').click()" style="font-size: 0.85rem; padding: 8px 16px;">
                         <i class="fa-solid fa-image" style="margin-right: 6px;"></i> Change Photo from Gallery
                     </button>
-                    <input type="file" accept="image/*" id="galleryFileInput" style="display: none;" onchange="handleGalleryPhotoSelect(this)">
+                    <input type="file" name="photo_file" accept="image/*" id="galleryFileInput" style="display: none;" onchange="handleGalleryPhotoSelect(this)">
                 </div>
             </div>
         </div>

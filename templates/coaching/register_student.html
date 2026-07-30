@@ -8,7 +8,7 @@
 <div class="card-premium" style="max-width: 800px; margin: 0 auto;">
     <h2 style="margin-bottom: 24px;">Student Account Registration Wizard</h2>
     
-    <form method="post" action="{% url 'register_student' %}">
+    <form method="post" action="{% url 'register_student' %}" enctype="multipart/form-data">
         {% csrf_token %}
         
         <h4 style="color: var(--accent-indigo); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">1. User Credentials</h4>
@@ -93,7 +93,7 @@
                     <button type="button" class="btn-premium btn-secondary" onclick="document.getElementById('galleryFileInput').click()" style="font-size: 0.85rem; padding: 8px 16px;">
                         <i class="fa-solid fa-image" style="margin-right: 6px;"></i> Upload Photo from Gallery
                     </button>
-                    <input type="file" accept="image/*" id="galleryFileInput" style="display: none;" onchange="handleGalleryPhotoSelect(this)">
+                    <input type="file" name="photo_file" accept="image/*" id="galleryFileInput" style="display: none;" onchange="handleGalleryPhotoSelect(this)">
                 </div>
             </div>
         </div>
@@ -125,12 +125,18 @@
     const dueInput = document.getElementById('next_due_date');
 
     function updateDueDate() {
-        if (joiningInput.value) {
-            const joining = new Date(joiningInput.value);
-            joining.setDate(joining.getDate() + 30);
-            const yyyy = joining.getFullYear();
-            const mm = String(joining.getMonth() + 1).padStart(2, '0');
-            const dd = String(joining.getDate()).padStart(2, '0');
+        if (!joiningInput.value) return;
+        const joining = new Date(joiningInput.value);
+        if (!isNaN(joining.getTime())) {
+            const anchorDay = joining.getDate();
+            const nextMonth = new Date(joining.getFullYear(), joining.getMonth() + 1, 1);
+            const maxDays = new Date(joining.getFullYear(), joining.getMonth() + 2, 0).getDate();
+            const targetDay = Math.min(anchorDay, maxDays);
+            nextMonth.setDate(targetDay);
+            
+            const yyyy = nextMonth.getFullYear();
+            const mm = String(nextMonth.getMonth() + 1).padStart(2, '0');
+            const dd = String(nextMonth.getDate()).padStart(2, '0');
             dueInput.value = `${yyyy}-${mm}-${dd}`;
         }
     }

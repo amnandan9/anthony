@@ -2,6 +2,7 @@ import json
 import datetime
 import base64
 import csv
+import calendar
 import numpy as np
 from io import BytesIO
 from PIL import Image, ImageOps
@@ -18,6 +19,26 @@ from coaching.models import User, Batch, StudentProfile, AttendanceRecord, FeePa
 from coaching.decorators import super_admin_required, teacher_required, student_required, role_required
 
 
+
+def get_next_month_due_date(from_date, anchor_day=None):
+    """Calculates the next due date by advancing 1 month while keeping the exact same day of the month."""
+    if not from_date:
+        from_date = timezone.localdate()
+    if isinstance(from_date, str):
+        try:
+            from_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+        except ValueError:
+            from_date = timezone.localdate()
+    if anchor_day is None:
+        anchor_day = from_date.day
+    year = from_date.year
+    month = from_date.month + 1
+    if month > 12:
+        month = 1
+        year += 1
+    max_days = calendar.monthrange(year, month)[1]
+    day = min(anchor_day, max_days)
+    return datetime.date(year, month, day)
 
 # --- Authentication Views ---
 
@@ -257,11 +278,37 @@ def register_student(request):
         school = request.POST.get('school_college')
         contact = request.POST.get('contact_number')
         parent_contact = request.POST.get('parent_contact')
-        joining_date = request.POST.get('joining_date') or timezone.localdate()
+        
+        joining_date_raw = request.POST.get('joining_date')
+        if joining_date_raw:
+            try:
+                joining_date = datetime.datetime.strptime(joining_date_raw, '%Y-%m-%d').date()
+            except ValueError:
+                joining_date = timezone.localdate()
+        else:
+            joining_date = timezone.localdate()
+            
         batch_id = request.POST.get('batch')
         fee = request.POST.get('monthly_fee')
-        next_due = request.POST.get('next_due_date')
+        
+        next_due_raw = request.POST.get('next_due_date')
+        if next_due_raw and next_due_raw.strip():
+            try:
+                next_due = datetime.datetime.strptime(next_due_raw.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                next_due = get_next_month_due_date(joining_date, anchor_day=joining_date.day)
+        else:
+            next_due = get_next_month_due_date(joining_date, anchor_day=joining_date.day)
+            
         face_data = request.POST.get('face_data')
+        if 'photo_file' in request.FILES and request.FILES['photo_file']:
+            try:
+                photo = request.FILES['photo_file']
+                encoded = base64.b64encode(photo.read()).decode('utf-8')
+                mime = photo.content_type or 'image/jpeg'
+                face_data = f"data:{mime};base64,{encoded}"
+            except Exception as e:
+                pass
         
         if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists.")
@@ -272,7 +319,8 @@ def register_student(request):
             email=email,
             first_name=first_name,
             last_name=last_name,
-            role='student'
+            role='student',
+            face_data=face_data or ''
         )
         user.set_password(password)
         user.save()
@@ -289,7 +337,7 @@ def register_student(request):
             batch=batch,
             monthly_fee=fee,
             next_due_date=next_due,
-            face_data=face_data
+            face_data=face_data or ''
         )
         
         messages.success(request, f"Student {user.get_full_name()} registered successfully!")
@@ -308,19 +356,47 @@ def edit_student(request, student_id):
         user.first_name = request.POST.get('first_name')
         user.last_name = request.POST.get('last_name')
         user.email = request.POST.get('email')
-        user.save()
         
         profile.class_std = request.POST.get('class_std')
         profile.school_college = request.POST.get('school_college')
         profile.contact_number = request.POST.get('contact_number')
         profile.parent_contact = request.POST.get('parent_contact')
-        profile.joining_date = request.POST.get('joining_date')
-        profile.monthly_fee = request.POST.get('monthly_fee')
-        profile.next_due_date = request.POST.get('next_due_date')
         
+        joining_date_raw = request.POST.get('joining_date')
+        if joining_date_raw:
+            try:
+                profile.joining_date = datetime.datetime.strptime(joining_date_raw, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+                
+        profile.monthly_fee = request.POST.get('monthly_fee')
+        
+        next_due_raw = request.POST.get('next_due_date')
+        if next_due_raw and next_due_raw.strip():
+            try:
+                profile.next_due_date = datetime.datetime.strptime(next_due_raw.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                anchor_day = profile.joining_date.day if profile.joining_date else timezone.localdate().day
+                profile.next_due_date = get_next_month_due_date(timezone.localdate(), anchor_day=anchor_day)
+        else:
+            anchor_day = profile.joining_date.day if profile.joining_date else timezone.localdate().day
+            profile.next_due_date = get_next_month_due_date(timezone.localdate(), anchor_day=anchor_day)
+            
         face_data = request.POST.get('face_data')
-        if face_data:
+        if 'photo_file' in request.FILES and request.FILES['photo_file']:
+            try:
+                photo = request.FILES['photo_file']
+                encoded = base64.b64encode(photo.read()).decode('utf-8')
+                mime = photo.content_type or 'image/jpeg'
+                face_data = f"data:{mime};base64,{encoded}"
+            except Exception as e:
+                pass
+                
+        if face_data and face_data.strip():
             profile.face_data = face_data
+            user.face_data = face_data
+            
+        user.save()
             
         batch_id = request.POST.get('batch')
         profile.batch = Batch.objects.filter(id=batch_id).first() if batch_id else None
@@ -427,14 +503,17 @@ def collect_fee(request, student_id):
             remarks=remarks
         )
         
+        anchor_day = profile.joining_date.day if profile.joining_date else (profile.next_due_date.day if profile.next_due_date else timezone.localdate().day)
+        
         if next_due and next_due.strip():
             try:
                 profile.next_due_date = datetime.datetime.strptime(next_due.strip(), '%Y-%m-%d').date()
             except ValueError:
-                profile.next_due_date = (profile.next_due_date or timezone.localdate()) + datetime.timedelta(days=30)
+                base_due = profile.next_due_date if (profile.next_due_date and profile.next_due_date >= timezone.localdate()) else timezone.localdate()
+                profile.next_due_date = get_next_month_due_date(base_due, anchor_day=anchor_day)
         else:
             base_due = profile.next_due_date if (profile.next_due_date and profile.next_due_date >= timezone.localdate()) else timezone.localdate()
-            profile.next_due_date = base_due + datetime.timedelta(days=30)
+            profile.next_due_date = get_next_month_due_date(base_due, anchor_day=anchor_day)
             
         profile.save()
         
@@ -924,6 +1003,8 @@ def public_student_info(request):
                 effective_note = profile.batch.daily_note.strip()
 
             face_data = profile.face_data or profile.user.face_data or ""
+            if face_data and not face_data.startswith('data:'):
+                face_data = f"data:image/jpeg;base64,{face_data}"
 
             return JsonResponse({
                 'success': True,
