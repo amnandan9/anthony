@@ -4,10 +4,10 @@
 {% block title %}St. Anthony Coaching Center - Sign In{% endblock %}
 
 {% block auth_content %}
-<div class="auth-container">
+<div class="auth-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 85vh;">
     <div class="auth-card" style="text-align: center;">
-        <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 190px; width: 190px; object-fit: contain; margin: 0 auto 24px; display: block;">
-        <h1 class="auth-title" style="font-size: 2.1rem; margin-bottom: 8px;">St. Anthony Coaching Center</h1>
+        <img src="{% static 'coaching/logo.png' %}" alt="St. Anthony Logo" style="height: 220px; width: 220px; object-fit: contain; margin: 0 auto 24px; display: block; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));">
+        <h1 class="auth-title" style="font-size: 2.2rem; margin-bottom: 8px; color: #ffffff !important; text-shadow: 0 0 20px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.5); font-weight: 800; letter-spacing: -0.5px;">St. Anthony Coaching Center</h1>
         <p class="auth-subtitle" style="margin-bottom: 32px; color: var(--text-secondary);">Sign in to manage your coaching portal</p>
         
         <form method="post" action="{% url 'login' %}">
@@ -34,6 +34,15 @@
             </button>
         </div>
     </div>
+
+    <!-- Login Page Creative Footer -->
+    <footer style="margin-top: 28px; text-align: center; font-size: 0.82rem; color: rgba(255, 255, 255, 0.8); background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.12); padding: 10px 22px; border-radius: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);">
+        <span>© All Rights Reserved to <strong style="color: #ffffff; font-weight: 700;">Nandan</strong></span>
+        <span style="color: rgba(255,255,255,0.3);">|</span>
+        <a href="tel:8310958499" style="color: var(--accent-emerald); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+            <i class="fa-solid fa-phone" style="font-size: 0.75rem;"></i> 8310958499
+        </a>
+    </footer>
 </div>
 
 <!-- Public Info Scanner Modal -->
@@ -93,6 +102,10 @@
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Next Due Date:</span>
                 <strong style="color: var(--text-primary);" id="pubNextDue">--/--/----</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Scanned IP:</span>
+                <strong style="color: var(--accent-indigo); font-size: 0.82rem;" id="pubScannedIp">--</strong>
             </div>
             <div style="display: flex; justify-content: space-between; padding-top: 4px;">
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Fee Status:</span>
@@ -245,6 +258,7 @@
                 document.getElementById("pubStudentBatch").innerText = data.batch || "--";
                 document.getElementById("pubStudentSchool").innerText = data.school || "--";
                 document.getElementById("pubNextDue").innerText = data.next_due || "--/--/----";
+                document.getElementById("pubScannedIp").innerText = data.scanned_ip || "Logged";
                 
                 const badgeEl = document.getElementById("pubFeeStatusBadge");
                 const feeStatus = data.fee_status || "Not Paid";
@@ -271,7 +285,7 @@
                     reminderContainer.style.display = "none";
                 }
 
-                // Voice Read-Aloud Assignment Note
+                // Voice Read-Aloud & Homework Note
                 pubNoteText = data.daily_note || "";
                 const noteContainer = document.getElementById("pubDailyNoteContainer");
                 if (pubNoteText && pubNoteText.trim() !== "") {
@@ -283,15 +297,34 @@
                     stopPublicSpeech();
                 }
                 
-                // Web Browser Push Notification
+                // Web Browser Push Notification for Assigned HW & Scan Alert
                 try {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        new Notification(`St. Anthony Portal - ${data.student_name}`, {
-                            body: data.fee_reminder_msg || data.daily_note || `Checked info for ${data.student_name}`,
-                            icon: '/static/coaching/logo.png'
+                    const notifyUser = () => {
+                        let notifTitle = `St. Anthony Portal - ${data.student_name}`;
+                        let notifBody = `Checked student profile for ${data.student_name}`;
+                        
+                        if (data.daily_note && data.daily_note.trim() !== "") {
+                            notifTitle = `📚 HW Alert: ${data.student_name}`;
+                            notifBody = `Assigned HW: ${data.daily_note}`;
+                        } else if (data.fee_reminder_msg) {
+                            notifTitle = `🔔 Fee Alert: ${data.student_name}`;
+                            notifBody = data.fee_reminder_msg;
+                        }
+                        
+                        new Notification(notifTitle, {
+                            body: notifBody,
+                            icon: '/static/coaching/logo.png',
+                            badge: '/static/coaching/logo.png',
+                            tag: 'student-scan-' + (data.username || 'user')
                         });
+                    };
+
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        notifyUser();
                     } else if ('Notification' in window && Notification.permission !== 'denied') {
-                        Notification.requestPermission();
+                        Notification.requestPermission().then(perm => {
+                            if (perm === 'granted') notifyUser();
+                        });
                     }
                 } catch (e) {
                     console.error("Web Notification error:", e);
