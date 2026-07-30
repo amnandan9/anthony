@@ -427,10 +427,18 @@ def collect_fee(request, student_id):
             remarks=remarks
         )
         
-        profile.next_due_date = next_due
+        if next_due and next_due.strip():
+            try:
+                profile.next_due_date = datetime.datetime.strptime(next_due.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                profile.next_due_date = (profile.next_due_date or timezone.localdate()) + datetime.timedelta(days=30)
+        else:
+            base_due = profile.next_due_date if (profile.next_due_date and profile.next_due_date >= timezone.localdate()) else timezone.localdate()
+            profile.next_due_date = base_due + datetime.timedelta(days=30)
+            
         profile.save()
         
-        messages.success(request, f"Fee payment of ₹{amount} recorded for {profile.user.get_full_name()}. Next due: {next_due}.")
+        messages.success(request, f"Fee payment of ₹{amount} recorded for {profile.user.get_full_name()}. Next due date: {profile.next_due_date.strftime('%d-%m-%Y')}.")
         return redirect('student_detail', student_id=student_id)
     return redirect('teacher_dashboard')
 

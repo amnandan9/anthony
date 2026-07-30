@@ -418,7 +418,7 @@
                     dueBadge.style.overflow = 'hidden';
                     dueBadge.style.textOverflow = 'ellipsis';
                     dueBadge.style.maxWidth = '100%';
-                    dueBadge.innerHTML = `<i class="fa-solid fa-coins" style="font-size:0.6rem; margin-right:2px;"></i> ${due.name}`;
+                    dueBadge.innerHTML = `<span class="due-name-desktop"><i class="fa-solid fa-coins" style="font-size:0.6rem; margin-right:2px;"></i> ${due.name}</span><span class="due-name-mobile" title="Fee Due: ${due.name}">💰</span>`;
                     dueBadge.title = `Fee Due: ${due.name}`;
                     dotsEl.appendChild(dueBadge);
                 });

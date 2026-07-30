@@ -283,6 +283,20 @@
                     stopPublicSpeech();
                 }
                 
+                // Web Browser Push Notification
+                try {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification(`St. Anthony Portal - ${data.student_name}`, {
+                            body: data.fee_reminder_msg || data.daily_note || `Checked info for ${data.student_name}`,
+                            icon: '/static/coaching/logo.png'
+                        });
+                    } else if ('Notification' in window && Notification.permission !== 'denied') {
+                        Notification.requestPermission();
+                    }
+                } catch (e) {
+                    console.error("Web Notification error:", e);
+                }
+                
                 document.getElementById("publicDetailModal").style.display = "flex";
             } else {
                 alert("Error: " + data.message);
