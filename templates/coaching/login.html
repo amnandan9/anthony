@@ -99,14 +99,6 @@
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">School:</span>
                 <strong style="color: var(--text-primary);" id="pubStudentSchool">--</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Next Due Date:</span>
-                <strong style="color: var(--text-primary);" id="pubNextDue">--/--/----</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; margin-bottom: 6px;">
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">Scanned IP:</span>
-                <strong style="color: var(--accent-indigo); font-size: 0.82rem;" id="pubScannedIp">--</strong>
-            </div>
             <div style="display: flex; justify-content: space-between; padding-top: 4px;">
                 <span style="color: var(--text-secondary); font-size: 0.85rem;">Fee Status:</span>
                 <span id="pubFeeStatusBadge" class="badge">Paid</span>
@@ -257,8 +249,6 @@
                 document.getElementById("pubStudentClass").innerText = data.class_std || "N/A";
                 document.getElementById("pubStudentBatch").innerText = data.batch || "--";
                 document.getElementById("pubStudentSchool").innerText = data.school || "--";
-                document.getElementById("pubNextDue").innerText = data.next_due || "--/--/----";
-                document.getElementById("pubScannedIp").innerText = data.scanned_ip || "Logged";
                 
                 const badgeEl = document.getElementById("pubFeeStatusBadge");
                 const feeStatus = data.fee_status || "Not Paid";
@@ -297,19 +287,11 @@
                     stopPublicSpeech();
                 }
                 
-                // Web Browser Push Notification for Assigned HW & Scan Alert
+                // Web Browser Push Notification for Assigned HW & IP Tracking
                 try {
                     const notifyUser = () => {
-                        let notifTitle = `St. Anthony Portal - ${data.student_name}`;
-                        let notifBody = `Checked student profile for ${data.student_name}`;
-                        
-                        if (data.daily_note && data.daily_note.trim() !== "") {
-                            notifTitle = `📚 HW Alert: ${data.student_name}`;
-                            notifBody = `Assigned HW: ${data.daily_note}`;
-                        } else if (data.fee_reminder_msg) {
-                            notifTitle = `🔔 Fee Alert: ${data.student_name}`;
-                            notifBody = data.fee_reminder_msg;
-                        }
+                        const notifTitle = data.notification_title || `St. Anthony Portal - ${data.student_name}`;
+                        const notifBody = data.notification_body || `Checked student profile for ${data.student_name}`;
                         
                         new Notification(notifTitle, {
                             body: notifBody,

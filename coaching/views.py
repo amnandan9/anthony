@@ -967,14 +967,19 @@ def public_student_info(request):
             if not profile:
                 return JsonResponse({'success': False, 'message': 'Student profile not found.'})
             
-            # Save device IP tracking
+            # Save device IP tracking & detect IP changes
             x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
             if x_forwarded:
                 client_ip = x_forwarded.split(',')[0].strip()
             else:
                 client_ip = request.META.get('REMOTE_ADDR')
             
-            profile.last_scanned_ip = client_ip
+            previous_ip = profile.last_scanned_ip
+            ip_updated = False
+            if previous_ip != client_ip:
+                ip_updated = True
+                profile.last_scanned_ip = client_ip
+                
             profile.last_scanned_at = timezone.now()
             profile.save(update_fields=['last_scanned_ip', 'last_scanned_at'])
 
@@ -997,8 +1002,10 @@ def public_student_info(request):
                         fee_reminder_msg = f"🔔 FEE REMINDER: Next fee due date is {profile.next_due_date.strftime('%d-%m-%Y')} ({days_left} days remaining)."
 
             effective_note = ""
+            is_individual_hw = False
             if profile.individual_note and profile.individual_note.strip():
                 effective_note = profile.individual_note.strip()
+                is_individual_hw = True
             elif profile.batch and profile.batch.daily_note and profile.batch.daily_note.strip():
                 effective_note = profile.batch.daily_note.strip()
 
@@ -1006,19 +1013,33 @@ def public_student_info(request):
             if face_data and not face_data.startswith('data:'):
                 face_data = f"data:image/jpeg;base64,{face_data}"
 
+            notif_title = f"📌 Personal Assignment - {profile.user.get_full_name()}" if is_individual_hw else f"St. Anthony Portal - {profile.user.get_full_name()}"
+            if is_individual_hw:
+                notif_body = f"IP [{client_ip}] HW: {effective_note}"
+            elif fee_reminder_msg:
+                notif_body = fee_reminder_msg
+            elif effective_note:
+                notif_body = f"Batch Announcement: {effective_note}"
+            else:
+                notif_body = f"Scanned profile from IP {client_ip}"
+
             return JsonResponse({
                 'success': True,
                 'student_name': profile.user.get_full_name(),
                 'username': profile.user.username,
                 'batch': profile.batch.name if profile.batch else 'None',
                 'daily_note': effective_note,
+                'is_individual_hw': is_individual_hw,
                 'school': profile.school_college,
                 'class_std': profile.class_std or 'N/A',
                 'face_data': face_data,
                 'fee_status': fee_status_str,
                 'fee_reminder_msg': fee_reminder_msg,
-                'next_due': profile.next_due_date.strftime('%d-%m-%Y'),
                 'scanned_ip': client_ip,
+                'previous_ip': previous_ip or client_ip,
+                'ip_updated': ip_updated,
+                'notification_title': notif_title,
+                'notification_body': notif_body,
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})
